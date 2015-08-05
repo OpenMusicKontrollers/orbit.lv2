@@ -111,8 +111,8 @@ orbit:looper
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
 		lv2:index 4 ;
-		lv2:symbol "capacity_1" ;
-		lv2:name "Capacity 1" ;
+		lv2:symbol "capacity_play" ;
+		lv2:name "Playback Capacity" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
 		lv2:maximum 100.0 ;
@@ -121,8 +121,8 @@ orbit:looper
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
 		lv2:index 5 ;
-		lv2:symbol "capacity_2" ;
-		lv2:name "Capacity 2" ;
+		lv2:symbol "capacity_rec" ;
+		lv2:name "Recording Capacity" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
 		lv2:maximum 100.0 ;
@@ -131,8 +131,8 @@ orbit:looper
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
 		lv2:index 6 ;
-		lv2:symbol "position" ;
-		lv2:name "Position" ;
+		lv2:symbol "position_play" ;
+		lv2:name "Playback Position" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
 		lv2:maximum 100.0 ;
