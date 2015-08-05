@@ -42,9 +42,11 @@ struct _plughandle_t {
 	LV2_Atom_Sequence *event_out;
 	const float *state;
 	float *capacity;
+	float *position;
 
 	plugstate_t state_i;
 	uint32_t cap_i;
+	int64_t last_i;
 	uint8_t buf [BUF_SIZE];
 	int64_t offset;
 	LV2_Atom_Event *ev;
@@ -97,6 +99,9 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 		case 3:
 			handle->capacity = (float *)data;
 			break;
+		case 4:
+			handle->position = (float *)data;
+			break;
 		default:
 			break;
 	}
@@ -140,6 +145,15 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 				handle->offset = 0;
 			}
+		
+			// repeat
+			if(lv2_atom_sequence_is_end(&seq->body, seq->atom.size, handle->ev))
+			{
+				// rewind
+				handle->ev = lv2_atom_sequence_begin(&seq->body);
+
+				handle->offset = 0;
+			}
 
 			while(!lv2_atom_sequence_is_end(&seq->body, seq->atom.size, handle->ev))
 			{
@@ -166,12 +180,14 @@ run(LV2_Handle instance, uint32_t nsamples)
 				seq->body.pad = 0;
 
 				handle->offset = 0;
+				handle->last_i = 0;
 			}
 
 			LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 			{
 				LV2_Atom_Event *e = lv2_atom_sequence_append_event(seq, BUF_SIZE, ev);
 				e->time.frames += handle->offset;
+				handle->last_i = e->time.frames;
 			}
 
 			break;
@@ -187,6 +203,16 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	handle->state_i = state_i;
 	handle->offset += nsamples;
+
+	if(state_i == STATE_PLAY)
+	{
+		if(handle->offset < handle->last_i)
+			*handle->position = 100.f * handle->offset / handle->last_i;
+		else
+			*handle->position = 100.f;
+	}
+	else
+		*handle->position = 0.f;
 }
 
 static void
