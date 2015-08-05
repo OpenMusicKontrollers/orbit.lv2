@@ -145,7 +145,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 				handle->offset = 0;
 			}
-		
+
 			// repeat
 			if(lv2_atom_sequence_is_end(&seq->body, seq->atom.size, handle->ev))
 			{
@@ -162,7 +162,14 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 				LV2_Atom_Event *e = lv2_atom_sequence_append_event(handle->event_out,
 					capacity, handle->ev);
-				e->time.frames -= handle->offset;
+				if(e)
+				{
+					e->time.frames -= handle->offset;
+					if(e->time.frames < 0)
+						e->time.frames = 0; // underflow
+				}
+				else
+					break; // overflow
 
 				handle->ev = lv2_atom_sequence_next(handle->ev);
 			}
@@ -186,8 +193,13 @@ run(LV2_Handle instance, uint32_t nsamples)
 			LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 			{
 				LV2_Atom_Event *e = lv2_atom_sequence_append_event(seq, BUF_SIZE, ev);
-				e->time.frames += handle->offset;
-				handle->last_i = e->time.frames;
+				if(e)
+				{
+					e->time.frames += handle->offset;
+					handle->last_i = e->time.frames;
+				}
+				else
+					break; // overflow
 			}
 
 			break;
