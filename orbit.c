@@ -24,6 +24,8 @@ lv2_descriptor(uint32_t index)
 	{
 		case 0:
 			return &orbit_looper;
+		case 1:
+			return &orbit_pacemaker;
 		default:
 			return NULL;
 	}

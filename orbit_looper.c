@@ -43,7 +43,22 @@ enum _plugstate_t {
 struct _plughandle_t {
 	LV2_URID_Map *map;
 
+	struct {
+		LV2_URID time_position;
+		LV2_URID time_barBeat;
+		LV2_URID time_bar;
+		LV2_URID time_beat;
+		LV2_URID time_beatUnit;
+		LV2_URID time_beatsPerBar;
+		LV2_URID time_beatsPerMinute;
+		LV2_URID time_frame;
+		LV2_URID time_framesPerSecond;
+		LV2_URID time_speed;
+	} urid;
+
 	LV2_Atom_Forge forge;
+
+	position_t pos;
 
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
@@ -63,6 +78,57 @@ struct _plughandle_t {
 	LV2_Atom_Event *ev;
 };
 
+static inline void
+_position_deatomize(plughandle_t *handle, const LV2_Atom_Object *obj, position_t *pos)
+{
+	const LV2_Atom* name = NULL;
+	const LV2_Atom* age  = NULL;
+
+	const LV2_Atom_Float *bar_beat = NULL;
+	const LV2_Atom_Long *bar = NULL;
+	const LV2_Atom_Double *beat = NULL;
+	const LV2_Atom_Int *beat_unit = NULL;
+	const LV2_Atom_Float *beats_per_bar = NULL;
+	const LV2_Atom_Float *beats_per_minute = NULL;
+	const LV2_Atom_Long *frame = NULL;
+	const LV2_Atom_Float *frames_per_second = NULL;
+	const LV2_Atom_Float *speed = NULL;
+
+	LV2_Atom_Object_Query q [] = {
+		{ handle->urid.time_barBeat, (const LV2_Atom **)&bar_beat },
+		{ handle->urid.time_bar, (const LV2_Atom **)&bar },
+		{ handle->urid.time_beat, (const LV2_Atom **)&beat },
+		{ handle->urid.time_beatUnit, (const LV2_Atom **)&beat_unit },
+		{ handle->urid.time_beatsPerBar, (const LV2_Atom **)&beats_per_bar },
+		{ handle->urid.time_beatsPerMinute, (const LV2_Atom **)&beats_per_minute },
+		{ handle->urid.time_frame, (const LV2_Atom **)&frame },
+		{ handle->urid.time_framesPerSecond, (const LV2_Atom **)&frames_per_second },
+		{ handle->urid.time_speed, (const LV2_Atom **)&speed },
+		LV2_ATOM_OBJECT_QUERY_END
+	};
+
+	lv2_atom_object_query(obj, q);
+
+	if(bar_beat)
+		pos->bar_beat = bar_beat->body;
+	if(bar)
+		pos->bar = bar->body;
+	if(beat)
+		pos->beat = beat->body;
+	if(beat_unit)
+		pos->beat_unit = beat_unit->body;
+	if(beats_per_bar)
+		pos->beats_per_bar = beats_per_bar->body;
+	if(beats_per_minute)
+		pos->beats_per_minute = beats_per_minute->body;
+	if(frame)
+		pos->frame = frame->body;
+	if(frames_per_second)
+		pos->frames_per_second = frames_per_second->body;
+	if(speed)
+		pos->speed = speed->body;
+}
+
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
@@ -71,6 +137,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
+
+	handle->pos.frames_per_second = rate;
 
 	for(i=0; features[i]; i++)
 	{
@@ -85,6 +153,27 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
+	handle->urid.time_position = handle->map->map(handle->map->handle,
+		LV2_TIME__Position);
+	handle->urid.time_barBeat = handle->map->map(handle->map->handle,
+		LV2_TIME__barBeat);
+	handle->urid.time_bar = handle->map->map(handle->map->handle,
+		LV2_TIME__bar);
+	handle->urid.time_beat = handle->map->map(handle->map->handle,
+		LV2_TIME__beat);
+	handle->urid.time_beatUnit = handle->map->map(handle->map->handle,
+		LV2_TIME__beatUnit);
+	handle->urid.time_beatsPerBar = handle->map->map(handle->map->handle,
+		LV2_TIME__beatsPerBar);
+	handle->urid.time_beatsPerMinute = handle->map->map(handle->map->handle,
+		LV2_TIME__beatsPerMinute);
+	handle->urid.time_frame = handle->map->map(handle->map->handle,
+		LV2_TIME__frame);
+	handle->urid.time_framesPerSecond = handle->map->map(handle->map->handle,
+		LV2_TIME__framesPerSecond);
+	handle->urid.time_speed = handle->map->map(handle->map->handle,
+		LV2_TIME__speed);
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
@@ -167,6 +256,13 @@ _rec(plughandle_t *handle, int substitute)
 
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
+		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
+		if(  (obj->atom.type == handle->forge.Object)
+			&& (obj->body.otype == handle->urid.time_position) )
+		{
+			_position_deatomize(handle, obj, &handle->pos);
+		}
+
 		LV2_Atom_Event *e = lv2_atom_sequence_append_event(rec_seq, BUF_SIZE, ev);
 		if(e)
 		{
@@ -176,6 +272,22 @@ _rec(plughandle_t *handle, int substitute)
 		}
 		else
 			break; // overflow
+	}
+}
+
+static inline void
+_skip(plughandle_t *handle)
+{
+	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
+
+	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
+	{
+		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
+		if(  (obj->atom.type == handle->forge.Object)
+			&& (obj->body.otype == handle->urid.time_position) )
+		{
+			_position_deatomize(handle, obj, &handle->pos);
+		}
 	}
 }
 
@@ -241,6 +353,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			case MODE_PLAY: // only playback, no recording
 			{
 				_play(handle, capacity, nsamples);
+				_skip(handle);
 
 				// automatic repeat
 				if(lv2_atom_sequence_is_end(&play_seq->body, play_seq->atom.size, handle->ev))
