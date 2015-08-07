@@ -82,56 +82,71 @@ orbit:looper
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
 		lv2:index 2 ;
-		lv2:symbol "mode" ;
-		lv2:name "Mode" ;
+		lv2:symbol "play_state" ;
+		lv2:name "Playback State" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
-		lv2:maximum 3.0 ;
-		lv2:portProperty lv2:integer ;
-		lv2:portProperty lv2:enumeration ;
-		lv2:scalePoint [ rdfs:label "Play" ;					rdf:value 0 ] ;
-		lv2:scalePoint [ rdfs:label "Record" ;				rdf:value 1 ] ;
-		lv2:scalePoint [ rdfs:label "Replace" ;				rdf:value 2 ] ;
-		lv2:scalePoint [ rdfs:label "Substitute" ;		rdf:value 3 ] ;
+		lv2:maximum 1.0 ;
+		lv2:portProperty lv2:toggled ;
 	] , [
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
 		lv2:index 3 ;
-		lv2:symbol "state" ;
-		lv2:name "State" ;
+		lv2:symbol "rec_state" ;
+		lv2:name "Recording State" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
 		lv2:maximum 1.0 ;
-		lv2:portProperty lv2:integer ;
-		lv2:portProperty lv2:enumeration ;
-		lv2:scalePoint [ rdfs:label "Paused" ;				rdf:value 0 ] ;
-		lv2:scalePoint [ rdfs:label "Rolling" ;				rdf:value 1 ] ;
+		lv2:portProperty lv2:toggled ;
 	] , [
-		# control output ports
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
 		lv2:index 4 ;
-		lv2:symbol "capacity_play" ;
+		lv2:symbol "punch_mode" ;
+		lv2:name "Punch Mode" ;
+		lv2:default 1.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		lv2:portProperty lv2:integer;
+		lv2:portProperty lv2:enumeration;
+		lv2:scalePoint [ rdfs:label "Beat" ;					rdf:value 0 ] ;
+		lv2:scalePoint [ rdfs:label "Bar" ;						rdf:value 1 ] ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 5 ;
+		lv2:symbol "width" ;
+		lv2:name "Width" ;
+		lv2:default 4.0 ;
+		lv2:minimum 1.0 ;
+		lv2:maximum 128 ;
+		lv2:portProperty lv2:integer;
+	] , [
+		# control output ports
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "play_capacity" ;
 		lv2:name "Playback Capacity" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
 		lv2:maximum 100.0 ;
 		units:unit units:pc ;
 	] , [
-	  a lv2:InputPort ,
+	  a lv2:OutputPort ,
 			lv2:ControlPort ;
-		lv2:index 5 ;
-		lv2:symbol "capacity_rec" ;
+		lv2:index 7 ;
+		lv2:symbol "rec_capacity" ;
 		lv2:name "Recording Capacity" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
 		lv2:maximum 100.0 ;
 		units:unit units:pc ;
 	] , [
-	  a lv2:InputPort ,
+	  a lv2:OutputPort ,
 			lv2:ControlPort ;
-		lv2:index 6 ;
-		lv2:symbol "position_play" ;
+		lv2:index 8 ;
+		lv2:symbol "play_position" ;
 		lv2:name "Playback Position" ;
 		lv2:default 0.0 ;
 		lv2:minimum 0.0 ;
