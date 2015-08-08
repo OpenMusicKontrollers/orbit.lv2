@@ -224,7 +224,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 		if(rolling_i && !handle->rolling_i && rewind_i) // start rolling
 			pos->frame = 0; // reset frame pointer
-		pos->beat = (double)pos->frame / pos->frames_per_second / 60.f * pos->beats_per_minute;
+		pos->beat = (double)pos->frame / pos->frames_per_second / 60.f * (pos->beats_per_minute * (pos->beat_unit / 4));
 		pos->bar_beat = fmod(pos->beat, pos->beats_per_bar);
 		pos->bar = pos->beat / pos->beats_per_bar;
 

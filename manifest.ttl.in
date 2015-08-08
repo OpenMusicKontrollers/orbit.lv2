@@ -27,6 +27,14 @@ orbit:looper
 	lv2:binary <orbit@LIB_EXT@> ;
 	rdfs:seeAlso <orbit.ttl> .
 
+# Orbit Click
+orbit:click
+	a lv2:Plugin ;
+	lv2:minorVersion @ORBIT_MINOR_VERSION@ ;
+	lv2:microVersion @ORBIT_MICRO_VERSION@ ;
+	lv2:binary <orbit@LIB_EXT@> ;
+	rdfs:seeAlso <orbit.ttl> .
+
 # Orbit Pacemaker
 orbit:pacemaker
 	a lv2:Plugin ;

@@ -125,8 +125,10 @@ _position_deatomize(plughandle_t *handle, const LV2_Atom_Object *obj, position_t
 
 	if(beat)
 		pos->beat = beat->body;
+	else if(bar && bar_beat) // calculate
+		pos->beat = bar->body * pos->beats_per_bar + bar_beat->body;
 	else // calculate
-		pos->beat = (double)pos->frame / pos->frames_per_second / 60.f * pos->beats_per_minute;
+		pos->beat = (double)pos->frame / pos->frames_per_second / 60.f * (pos->beats_per_minute * (pos->beat_unit / 4));
 
 	if(bar_beat)
 		pos->bar_beat = bar_beat->body;
@@ -355,12 +357,11 @@ run(LV2_Handle instance, uint32_t nsamples)
 			_position_deatomize(handle, obj, pos);
 			pos_has_changed = true;
 
-			handle->frames_per_beat = 1.f
-				/ pos->beats_per_minute * 60.f * pos->frames_per_second;
+			handle->frames_per_beat = 60.f / (pos->beats_per_minute * (pos->beat_unit / 4)) * pos->frames_per_second;
 		}
 	}
 
-	if(width_has_changed || punch_has_changed)
+	if(width_has_changed || punch_has_changed || pos_has_changed)
 	{
 		if(punch_i == PUNCH_BEAT)
 			handle->window = width_i * handle->frames_per_beat;

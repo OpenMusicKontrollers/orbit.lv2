@@ -29,6 +29,7 @@ find_package(PkgConfig) # ${PKG_CONFIG_FOUND}
 add_library(orbit MODULE
 	orbit.c
 	orbit_looper.c
+	orbit_click.c
 	orbit_pacemaker.c)
 target_link_libraries(orbit ${LIBS})
 set_target_properties(orbit PROPERTIES PREFIX "")

@@ -30,9 +30,11 @@
 
 // plugin uris
 #define ORBIT_LOOPER_URI						ORBIT_URI"#looper"
+#define ORBIT_CLICK_URI							ORBIT_URI"#click"
 #define ORBIT_PACEMAKER_URI					ORBIT_URI"#pacemaker"
 
 extern const LV2_Descriptor orbit_looper;
+extern const LV2_Descriptor orbit_click;
 extern const LV2_Descriptor orbit_pacemaker;
 
 typedef struct _position_t position_t;
