@@ -43,7 +43,6 @@ struct _position_t {
 	float bar_beat;
 	int64_t bar;
 
-	double beat;
 	uint32_t beat_unit;
 	float beats_per_bar;
 	float beats_per_minute;

@@ -48,7 +48,6 @@ struct _plughandle_t {
 		LV2_URID time_position;
 		LV2_URID time_barBeat;
 		LV2_URID time_bar;
-		LV2_URID time_beat;
 		LV2_URID time_beatUnit;
 		LV2_URID time_beatsPerBar;
 		LV2_URID time_beatsPerMinute;
@@ -83,7 +82,6 @@ _position_deatomize(plughandle_t *handle, const LV2_Atom_Object *obj, position_t
 
 	const LV2_Atom_Float *bar_beat = NULL;
 	const LV2_Atom_Long *bar = NULL;
-	const LV2_Atom_Double *beat = NULL;
 	const LV2_Atom_Int *beat_unit = NULL;
 	const LV2_Atom_Float *beats_per_bar = NULL;
 	const LV2_Atom_Float *beats_per_minute = NULL;
@@ -94,7 +92,6 @@ _position_deatomize(plughandle_t *handle, const LV2_Atom_Object *obj, position_t
 	LV2_Atom_Object_Query q [] = {
 		{ handle->urid.time_barBeat, (const LV2_Atom **)&bar_beat },
 		{ handle->urid.time_bar, (const LV2_Atom **)&bar },
-		{ handle->urid.time_beat, (const LV2_Atom **)&beat },
 		{ handle->urid.time_beatUnit, (const LV2_Atom **)&beat_unit },
 		{ handle->urid.time_beatsPerBar, (const LV2_Atom **)&beats_per_bar },
 		{ handle->urid.time_beatsPerMinute, (const LV2_Atom **)&beats_per_minute },
@@ -119,22 +116,15 @@ _position_deatomize(plughandle_t *handle, const LV2_Atom_Object *obj, position_t
 	if(speed)
 		pos->speed = speed->body;
 
-	if(beat)
-		pos->beat = beat->body;
-	else if(bar && bar_beat) // calculate
-		pos->beat = bar->body * pos->beats_per_bar + bar_beat->body;
-	else // calculate
-		pos->beat = (double)pos->frame / pos->frames_per_second / 60.f * (pos->beats_per_minute * (pos->beat_unit / 4));
-
 	if(bar_beat)
 		pos->bar_beat = bar_beat->body;
 	else // calculate
-		pos->bar_beat = fmod(pos->beat, pos->beats_per_bar);
+		pos->bar_beat = 0.f;
 
 	if(bar)
 		pos->bar = bar->body;
 	else // calculate
-		pos->bar = floor(pos->beat / pos->beats_per_bar);
+		pos->bar = 0;
 }
 
 static LV2_Handle
@@ -166,8 +156,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		LV2_TIME__barBeat);
 	handle->urid.time_bar = handle->map->map(handle->map->handle,
 		LV2_TIME__bar);
-	handle->urid.time_beat = handle->map->map(handle->map->handle,
-		LV2_TIME__beat);
 	handle->urid.time_beatUnit = handle->map->map(handle->map->handle,
 		LV2_TIME__beatUnit);
 	handle->urid.time_beatsPerBar = handle->map->map(handle->map->handle,
@@ -182,14 +170,15 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		LV2_TIME__speed);
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
-	
+
 	// Initialise instance fields
-	handle->pos.frames_per_second = rate;
-	handle->pos.beat_unit = 4;
-	handle->pos.beats_per_bar = 4.f;
-	handle->pos.beats_per_minute = 120.0f;
-	handle->frames_per_beat = 60.f / (handle->pos.beats_per_minute * (handle->pos.beat_unit / 4) ) * handle->pos.frames_per_second;
-	handle->frames_per_bar = handle->frames_per_beat * handle->pos.beats_per_bar;
+	position_t *pos = &handle->pos;
+	pos->frames_per_second = rate;
+	pos->beat_unit = 4;
+	pos->beats_per_bar = 4.f;
+	pos->beats_per_minute = 120.0f;
+	handle->frames_per_beat = 60.f / (pos->beats_per_minute * (pos->beat_unit / 4) ) * pos->frames_per_second;
+	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 
 	handle->attack_len = (uint32_t)(attack_s * rate);
 	handle->decay_len = (uint32_t)(decay_s * rate);
@@ -204,7 +193,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->bar.wave = malloc(handle->bar.wave_len * sizeof(float));
 	for(uint32_t i=0; i<handle->bar.wave_len; i++)
 		handle->bar.wave[i] = sin(i * 2.f * M_PI * bar_freq / rate) * amp;
-	
+
 	const double beat_freq = 440.0 * 2.f;
 	handle->beat.is_bar = false;
 	handle->beat.state = STATE_OFF;
@@ -245,7 +234,7 @@ activate(LV2_Handle instance)
 	handle->bar.elapsed_len = 0;
 	handle->bar.wave_offset = 0;
 	handle->bar.state = STATE_OFF;
-	
+
 	handle->beat.elapsed_len = 0;
 	handle->beat.wave_offset = 0;
 	handle->beat.state = STATE_OFF;
@@ -327,7 +316,7 @@ _update_position(plughandle_t *handle, wave_t *wave, const LV2_Atom_Object *obj)
 
 	wave->elapsed_len = wave->is_bar
 		? pos->bar_beat * handle->frames_per_beat
-		: modf(pos->beat, &integral) * handle->frames_per_beat;
+		: modf(pos->bar_beat, &integral) * handle->frames_per_beat;
 
 	if(wave->elapsed_len < handle->attack_len)
 		wave->state = STATE_ATTACK;
@@ -341,7 +330,7 @@ static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
-		
+
 	uint32_t last_t = 0;
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
@@ -349,7 +338,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		_clear(handle, &handle->beat, last_t, ev->time.frames);
 		_play(handle, &handle->bar, last_t, ev->time.frames);
 		_play(handle, &handle->beat, last_t, ev->time.frames);
-		
+
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 		if(  (obj->atom.type == handle->forge.Object)
 			&& (obj->body.otype == handle->urid.time_position) )

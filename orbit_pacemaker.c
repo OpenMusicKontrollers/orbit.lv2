@@ -30,7 +30,6 @@ struct _plughandle_t {
 		LV2_URID time_position;
 		LV2_URID time_barBeat;
 		LV2_URID time_bar;
-		LV2_URID time_beat;
 		LV2_URID time_beatUnit;
 		LV2_URID time_beatsPerBar;
 		LV2_URID time_beatsPerMinute;
@@ -63,31 +62,28 @@ _position_atomize(plughandle_t *handle, LV2_Atom_Forge *forge, position_t *pos)
 
 	lv2_atom_forge_frame_time(forge, 0);
 	lv2_atom_forge_object(forge, &frame, 0, handle->urid.time_position);
-	
+
 	lv2_atom_forge_key(forge, handle->urid.time_barBeat);
 	lv2_atom_forge_float(forge, pos->bar_beat);
-	
+
 	lv2_atom_forge_key(forge, handle->urid.time_bar);
 	lv2_atom_forge_long(forge, pos->bar);
-	
-	lv2_atom_forge_key(forge, handle->urid.time_beat);
-	lv2_atom_forge_double(forge, pos->beat);
-	
+
 	lv2_atom_forge_key(forge, handle->urid.time_beatUnit);
 	lv2_atom_forge_int(forge, pos->beat_unit);
-	
+
 	lv2_atom_forge_key(forge, handle->urid.time_beatsPerBar);
 	lv2_atom_forge_float(forge, pos->beats_per_bar);
-	
+
 	lv2_atom_forge_key(forge, handle->urid.time_beatsPerMinute);
 	lv2_atom_forge_float(forge, pos->beats_per_minute);
-	
+
 	lv2_atom_forge_key(forge, handle->urid.time_frame);
 	lv2_atom_forge_long(forge, pos->frame);
-	
+
 	lv2_atom_forge_key(forge, handle->urid.time_framesPerSecond);
 	lv2_atom_forge_float(forge, pos->frames_per_second);
-	
+
 	lv2_atom_forge_key(forge, handle->urid.time_speed);
 	lv2_atom_forge_float(forge, pos->speed);
 
@@ -125,8 +121,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		LV2_TIME__barBeat);
 	handle->urid.time_bar = handle->map->map(handle->map->handle,
 		LV2_TIME__bar);
-	handle->urid.time_beat = handle->map->map(handle->map->handle,
-		LV2_TIME__beat);
 	handle->urid.time_beatUnit = handle->map->map(handle->map->handle,
 		LV2_TIME__beatUnit);
 	handle->urid.time_beatsPerBar = handle->map->map(handle->map->handle,
@@ -224,9 +218,9 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 		if(rolling_i && !handle->rolling_i && rewind_i) // start rolling
 			pos->frame = 0; // reset frame pointer
-		pos->beat = (double)pos->frame / pos->frames_per_second / 60.f * (pos->beats_per_minute * (pos->beat_unit / 4));
-		pos->bar_beat = fmod(pos->beat, pos->beats_per_bar);
-		pos->bar = pos->beat / pos->beats_per_bar;
+		double beat = (double)pos->frame / pos->frames_per_second / 60.f * (pos->beats_per_minute * (pos->beat_unit / 4));
+		pos->bar_beat = fmod(beat, pos->beats_per_bar);
+		pos->bar = floor(beat / pos->beats_per_bar);
 
 		_position_atomize(handle, &handle->forge, &handle->pos);
 
