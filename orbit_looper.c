@@ -51,8 +51,8 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 
 	position_t pos;
-	double frames_per_beat;
-	double frames_per_bar;
+	float frames_per_beat;
+	float frames_per_bar;
 
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
@@ -64,12 +64,12 @@ struct _plughandle_t {
 	float *play_position;
 
 	punchmode_t punch_i;
-	int64_t width_i;
+	int32_t width_i;
 
 	int play;
 	uint8_t buf [2][BUF_SIZE];
-	int64_t offset;
-	int64_t window;
+	double offset;
+	double window;
 	LV2_Atom_Event *ev;
 };
 
@@ -223,7 +223,7 @@ activate(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
-	handle->offset = 0;
+	handle->offset = 0.f;
 	handle->play = 0;
 }
 
@@ -258,7 +258,7 @@ _rec(plughandle_t *handle, const LV2_Atom_Event *ev)
 	LV2_Atom_Event *e = lv2_atom_sequence_append_event(rec_seq, BUF_SIZE, ev);
 	if(e)
 	{
-		e->time.frames = handle->offset;
+		e->time.frames = (int64_t)handle->offset;
 	}
 	else
 		; // overflow
@@ -303,7 +303,7 @@ _update_position(plughandle_t *handle)
 {
 	position_t *pos = &handle->pos;
 
-	handle->frames_per_beat = 60.f / (pos->beats_per_minute * (pos->beat_unit / 4)) * pos->frames_per_second;
+	handle->frames_per_beat = 240.f / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
 	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 
 	switch(handle->punch_i)
@@ -385,7 +385,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 				if(handle->offset >= handle->window)
 				{
 					handle->play ^= 1; // swap buffers;
-					handle->offset %= handle->window;
+					handle->offset -= handle->window;
 					_reposition_rec(handle);
 					_reposition_play(handle);
 				}
@@ -407,7 +407,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 			if(handle->offset >= handle->window)
 			{
 				handle->play ^= 1; // swap buffers;
-				handle->offset %= handle->window;
+				handle->offset -= handle->window;
 				_reposition_rec(handle);
 				_reposition_play(handle);
 			}

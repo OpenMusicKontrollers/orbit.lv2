@@ -37,7 +37,7 @@ struct _wave_t {
 	state_t state;        // Current play state
 	float *wave;
 	uint32_t wave_len;
-	uint32_t elapsed_len;  // Frames since the start of the last click
+	double elapsed_len;  // Frames since the start of the last click
 	float *audio;
 };
 
@@ -177,7 +177,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	pos->beat_unit = 4;
 	pos->beats_per_bar = 4.f;
 	pos->beats_per_minute = 120.0f;
-	handle->frames_per_beat = 60.f / (pos->beats_per_minute * (pos->beat_unit / 4) ) * pos->frames_per_second;
+	handle->frames_per_beat = 240.f / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
 	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 
 	handle->attack_len = (uint32_t)(attack_s * rate);
@@ -231,11 +231,11 @@ activate(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
-	handle->bar.elapsed_len = 0;
+	handle->bar.elapsed_len = 0.f;
 	handle->bar.wave_offset = 0;
 	handle->bar.state = STATE_OFF;
 
-	handle->beat.elapsed_len = 0;
+	handle->beat.elapsed_len = 0.f;
 	handle->beat.wave_offset = 0;
 	handle->beat.state = STATE_OFF;
 }
@@ -265,7 +265,7 @@ _play(plughandle_t *handle, wave_t *wave, uint32_t begin, uint32_t end)
 			{
 				// Amplitude increases from 0..1 until attack_len
 				output[i] += wave->wave[wave->wave_offset] *
-					wave->elapsed_len / (float)handle->attack_len;
+					wave->elapsed_len / handle->attack_len;
 				if(wave->elapsed_len >= handle->attack_len)
 					wave->state = STATE_DECAY;
 
@@ -275,7 +275,7 @@ _play(plughandle_t *handle, wave_t *wave, uint32_t begin, uint32_t end)
 			{
 				// Amplitude decreases from 1..0 until attack_len + decay_len
 				output[i] += wave->wave[wave->wave_offset] *
-					(1 - ((wave->elapsed_len - handle->attack_len) / (float)handle->decay_len));
+					(1.f - ((wave->elapsed_len - handle->attack_len) / handle->decay_len));
 				if(wave->elapsed_len >= handle->attack_len + handle->decay_len)
 					wave->state = STATE_OFF;
 
@@ -291,14 +291,14 @@ _play(plughandle_t *handle, wave_t *wave, uint32_t begin, uint32_t end)
 		wave->wave_offset = (wave->wave_offset + 1) % wave->wave_len;
 
 		// Update elapsed time and start attack if necessary
-		const uint32_t boundary = wave->is_bar
+		const double boundary = wave->is_bar
 			? handle->frames_per_bar
 			: handle->frames_per_beat;
 
-		if(++wave->elapsed_len == boundary)
+		if(++wave->elapsed_len >= boundary)
 		{
 			wave->state = STATE_ATTACK;
-			wave->elapsed_len = 0;
+			wave->elapsed_len -= boundary;
 		}
 	}
 }
@@ -311,7 +311,7 @@ _update_position(plughandle_t *handle, wave_t *wave, const LV2_Atom_Object *obj)
 
 	_position_deatomize(handle, obj, pos);
 
-	handle->frames_per_beat = 60.f / (pos->beats_per_minute * (pos->beat_unit / 4)) * pos->frames_per_second;
+	handle->frames_per_beat = 240.f / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
 	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 
 	wave->elapsed_len = wave->is_bar
@@ -357,25 +357,11 @@ run(LV2_Handle instance, uint32_t nsamples)
 }
 
 static void
-deactivate(LV2_Handle instance)
-{
-	plughandle_t *handle = instance;
-
-	//TODO
-}
-
-static void
 cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
 	free(handle);
-}
-
-static const void*
-extension_data(const char* uri)
-{
-	return NULL;
 }
 
 const LV2_Descriptor orbit_click = {
@@ -384,7 +370,7 @@ const LV2_Descriptor orbit_click = {
 	.connect_port		= connect_port,
 	.activate				= activate,
 	.run						= run,
-	.deactivate			= deactivate,
+	.deactivate			= NULL,
 	.cleanup				= cleanup,
-	.extension_data	= extension_data
+	.extension_data	= NULL
 };

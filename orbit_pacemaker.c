@@ -41,6 +41,10 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 	position_t pos;
 
+	double frames_per_bar;
+	double frames_per_beat;
+	double rel;
+
 	LV2_Atom_Sequence *event_out;
 	const float *beat_unit;
 	const float *beats_per_bar;
@@ -173,14 +177,27 @@ static void
 activate(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
+	position_t *pos = &handle->pos;
 
-	//TODO
+	handle->rel = 0.f;
+
+	pos->frame = 0;
+	pos->bar = 0;
+	pos->bar_beat = 0.f;
+
+	pos->beat_unit = 4;
+	pos->beats_per_bar = 4.f;
+	pos->beats_per_minute = 120.0f;
+
+	handle->frames_per_beat = 240.f / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
+	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 }
 
 static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
+	position_t *pos = &handle->pos;
 	uint32_t capacity = handle->event_out->atom.size;
 	LV2_Atom_Forge_Frame frame;
 	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
@@ -203,13 +220,10 @@ run(LV2_Handle instance, uint32_t nsamples)
 	if(rolling_i != handle->rolling_i)
 		needs_update = 1;
 
-	// update frame position
-	if(handle->pos.speed > 0.f)
-		handle->pos.frame += nsamples * handle->pos.speed;
-
 	if(needs_update)
 	{
-		position_t *pos = &handle->pos;
+		// derive position as fractional bar
+		double bar_frac = handle->rel / handle->frames_per_bar;
 
 		pos->beat_unit = beat_unit_i;
 		pos->beats_per_bar = beats_per_bar_i;
@@ -217,28 +231,41 @@ run(LV2_Handle instance, uint32_t nsamples)
 		pos->speed = rolling_i ? 1.f : 0.f;
 
 		if(rolling_i && !handle->rolling_i && rewind_i) // start rolling
+		{
+			bar_frac = 0.f;
 			pos->frame = 0; // reset frame pointer
-		double beat = (double)pos->frame / pos->frames_per_second / 60.f * (pos->beats_per_minute * (pos->beat_unit / 4));
-		pos->bar_beat = fmod(beat, pos->beats_per_bar);
-		pos->bar = floor(beat / pos->beats_per_bar);
+			pos->bar = 0; // reset bar
+			handle->rel = 0;
+		}
+		pos->bar_beat = pos->beats_per_bar * bar_frac;
 
-		_position_atomize(handle, &handle->forge, &handle->pos);
+		_position_atomize(handle, &handle->forge, pos);
 
 		handle->beat_unit_i = beat_unit_i;
 		handle->beats_per_bar_i = beats_per_bar_i;
 		handle->beats_per_minute_i = beats_per_minute_i;
 		handle->rolling_i = rolling_i;
+
+		// update frames_per_beat and frames_per_bar
+		handle->frames_per_beat = 240.f / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
+		handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
+	}
+
+	if(pos->speed > 0.f)
+	{
+		// update frame position
+		pos->frame += nsamples * pos->speed;
+
+		// update rel position
+		handle->rel += nsamples;
+		if(handle->rel >= handle->frames_per_bar)
+		{
+			pos->bar += 1;
+			handle->rel -= handle->frames_per_bar;
+		}
 	}
 
 	lv2_atom_forge_pop(&handle->forge, &frame);
-}
-
-static void
-deactivate(LV2_Handle instance)
-{
-	plughandle_t *handle = instance;
-
-	//TODO
 }
 
 static void
@@ -249,19 +276,13 @@ cleanup(LV2_Handle instance)
 	free(handle);
 }
 
-static const void*
-extension_data(const char* uri)
-{
-	return NULL;
-}
-
 const LV2_Descriptor orbit_pacemaker = {
 	.URI						= ORBIT_PACEMAKER_URI,
 	.instantiate		= instantiate,
 	.connect_port		= connect_port,
 	.activate				= activate,
 	.run						= run,
-	.deactivate			= deactivate,
+	.deactivate			= NULL,
 	.cleanup				= cleanup,
-	.extension_data	= extension_data
+	.extension_data	= NULL
 };
