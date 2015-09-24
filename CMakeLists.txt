@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 project(orbit.lv2)
 
 include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/timely.lv2)
 include_directories(${PROJECT_BINARY_DIR})
 
 set(CMAKE_C_FLAGS "-std=gnu99 -fvisibility=hidden ${CMAKE_C_FLAGS}")

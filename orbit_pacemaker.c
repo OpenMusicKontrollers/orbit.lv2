@@ -21,7 +21,22 @@
 
 #include <orbit.h>
 
+typedef struct _position_t position_t;
 typedef struct _plughandle_t plughandle_t;
+
+struct _position_t {
+	float bar_beat;
+	int64_t bar;
+
+	uint32_t beat_unit;
+	float beats_per_bar;
+	float beats_per_minute;
+
+	int64_t frame;
+	float frames_per_second;
+
+	float speed;
+};
 
 struct _plughandle_t {
 	LV2_URID_Map *map;

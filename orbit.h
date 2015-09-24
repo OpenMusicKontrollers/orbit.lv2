@@ -37,20 +37,4 @@ extern const LV2_Descriptor orbit_looper;
 extern const LV2_Descriptor orbit_click;
 extern const LV2_Descriptor orbit_pacemaker;
 
-typedef struct _position_t position_t;
-
-struct _position_t {
-	float bar_beat;
-	int64_t bar;
-
-	uint32_t beat_unit;
-	float beats_per_bar;
-	float beats_per_minute;
-
-	int64_t frame;
-	float frames_per_second;
-
-	float speed;
-};
-
 #endif // _ORBIT_LV2_H

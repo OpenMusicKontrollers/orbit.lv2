@@ -20,6 +20,7 @@
 #include <math.h>
 
 #include <orbit.h>
+#include <timely.h>
 
 #define BUF_SIZE 0x1000000 // 16 MB
 #define BUF_PERCENT (100.f / BUF_SIZE)
@@ -34,25 +35,9 @@ enum _punchmode_t {
 
 struct _plughandle_t {
 	LV2_URID_Map *map;
-
-	struct {
-		LV2_URID time_position;
-		LV2_URID time_barBeat;
-		LV2_URID time_bar;
-		LV2_URID time_beat;
-		LV2_URID time_beatUnit;
-		LV2_URID time_beatsPerBar;
-		LV2_URID time_beatsPerMinute;
-		LV2_URID time_frame;
-		LV2_URID time_framesPerSecond;
-		LV2_URID time_speed;
-	} urid;
-
 	LV2_Atom_Forge forge;
-
-	position_t pos;
-	float frames_per_beat;
-	float frames_per_bar;
+	
+	timely_t timely;
 
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
@@ -64,85 +49,137 @@ struct _plughandle_t {
 	float *play_position;
 
 	punchmode_t punch_i;
-	int32_t width_i;
+	unsigned count_i;
+	unsigned width_i;
+	float window;
+	int64_t offset;
 
-	int play;
+	unsigned play;
+	bool rolling;
 	uint8_t buf [2][BUF_SIZE];
-	double offset;
-	double window;
 	LV2_Atom_Event *ev;
 };
 
 static inline void
-_position_deatomize(plughandle_t *handle, const LV2_Atom_Object *obj, position_t *pos)
+_play(plughandle_t *handle, int64_t to, uint32_t capacity)
 {
-	const LV2_Atom* name = NULL;
-	const LV2_Atom* age  = NULL;
+	const LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
 
-	const LV2_Atom_Float *bar_beat = NULL;
-	const LV2_Atom_Long *bar = NULL;
-	const LV2_Atom_Double *beat = NULL;
-	const LV2_Atom_Int *beat_unit = NULL;
-	const LV2_Atom_Float *beats_per_bar = NULL;
-	const LV2_Atom_Float *beats_per_minute = NULL;
-	const LV2_Atom_Long *frame = NULL;
-	const LV2_Atom_Float *frames_per_second = NULL;
-	const LV2_Atom_Float *speed = NULL;
+	const int64_t ref = handle->offset - to; // beginning of current period
 
-	LV2_Atom_Object_Query q [] = {
-		{ handle->urid.time_barBeat, (const LV2_Atom **)&bar_beat },
-		{ handle->urid.time_bar, (const LV2_Atom **)&bar },
-		{ handle->urid.time_beat, (const LV2_Atom **)&beat },
-		{ handle->urid.time_beatUnit, (const LV2_Atom **)&beat_unit },
-		{ handle->urid.time_beatsPerBar, (const LV2_Atom **)&beats_per_bar },
-		{ handle->urid.time_beatsPerMinute, (const LV2_Atom **)&beats_per_minute },
-		{ handle->urid.time_frame, (const LV2_Atom **)&frame },
-		{ handle->urid.time_framesPerSecond, (const LV2_Atom **)&frames_per_second },
-		{ handle->urid.time_speed, (const LV2_Atom **)&speed },
-		LV2_ATOM_OBJECT_QUERY_END
-	};
+	while(handle->ev && !lv2_atom_sequence_is_end(&play_seq->body, play_seq->atom.size, handle->ev))
+	{
+		if(handle->ev->time.frames >= handle->offset)
+			break; // event not part of this region
 
-	lv2_atom_object_query(obj, q);
+		LV2_Atom_Event *e = lv2_atom_sequence_append_event(handle->event_out,
+			capacity, handle->ev);
+		if(e)
+		{
+			e->time.frames -= ref;
+		}
+		else
+			break; // overflow
 
-	if(beat_unit)
-		pos->beat_unit = beat_unit->body;
-	if(beats_per_bar)
-		pos->beats_per_bar = beats_per_bar->body;
-	if(beats_per_minute)
-		pos->beats_per_minute = beats_per_minute->body;
-	if(frame)
-		pos->frame = frame->body;
-	if(frames_per_second)
-		pos->frames_per_second = frames_per_second->body;
-	if(speed)
-		pos->speed = speed->body;
+		handle->ev = lv2_atom_sequence_next(handle->ev);
+	}
+}
 
-	if(bar_beat)
-		pos->bar_beat = bar_beat->body;
-	else // calculate
-		pos->bar_beat = 0.f;
+static inline void
+_rec(plughandle_t *handle, const LV2_Atom_Event *ev)
+{
+	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
 
-	if(bar)
-		pos->bar = bar->body;
-	else // calculate
-		pos->bar = 0;
+	LV2_Atom_Event *e = lv2_atom_sequence_append_event(rec_seq, BUF_SIZE, ev);
+	if(e)
+	{
+		e->time.frames = handle->offset;
+	}
+	else
+		; // overflow
+}
+
+static inline void
+_reposition_play(plughandle_t *handle)
+{
+	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
+
+	LV2_ATOM_SEQUENCE_FOREACH(play_seq, ev)
+	{
+		if(ev->time.frames >= handle->offset)
+		{
+			// reposition here
+			handle->ev = ev;
+			return;
+		}
+	}
+
+	handle->ev = NULL;
+}
+
+static inline void
+_reposition_rec(plughandle_t *handle)
+{
+	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
+
+	LV2_ATOM_SEQUENCE_FOREACH(rec_seq, ev)
+	{
+		if(ev->time.frames >= handle->offset)
+		{
+			// truncate sequence here
+			rec_seq->atom.size = (uintptr_t)ev - (uintptr_t)&rec_seq->body;
+			return;
+		}
+	}
+}
+
+static inline void
+_window_refresh(plughandle_t *handle)
+{
+	timely_t *timely = &handle->timely;
+
+	if(handle->punch_i == PUNCH_BEAT)
+		handle->window = 100.f / (handle->width_i * TIMELY_FRAMES_PER_BEAT(timely));
+	else if(handle->punch_i == PUNCH_BAR)
+		handle->window = 100.f / (handle->width_i * TIMELY_FRAMES_PER_BAR(timely));
+}
+
+static void
+_cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
+{
+	plughandle_t *handle = data;
+
+	if(type == TIMELY_URI_SPEED(timely))
+	{
+		handle->rolling = TIMELY_SPEED(timely) > 0.f ? true : false;
+	}
+	else if(type == TIMELY_URI_BAR_BEAT(timely))
+	{
+		double beats = (double)TIMELY_BAR(timely) * TIMELY_BEATS_PER_BAR(timely)
+			+ TIMELY_BAR_BEAT(timely);
+
+		if(handle->punch_i == PUNCH_BEAT)
+			handle->offset = fmod(beats, handle->width_i) * TIMELY_FRAMES_PER_BEAT(timely);
+		else if(handle->punch_i == PUNCH_BAR)
+			handle->offset = fmod(beats, handle->width_i * TIMELY_BEATS_PER_BAR(timely))
+				* TIMELY_FRAMES_PER_BEAT(timely);
+
+		_reposition_rec(handle);
+		_reposition_play(handle);
+	}
+
+	_window_refresh(handle);
 }
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
 {
-	int i;
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
 
-	handle->pos.frames_per_second = rate;
-	handle->pos.beat_unit = 4;
-	handle->pos.beats_per_bar = 4.f;
-	handle->pos.beats_per_minute = 120.f;
-
-	for(i=0; features[i]; i++)
+	for(unsigned i=0; features[i]; i++)
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
@@ -156,27 +193,14 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	handle->urid.time_position = handle->map->map(handle->map->handle,
-		LV2_TIME__Position);
-	handle->urid.time_barBeat = handle->map->map(handle->map->handle,
-		LV2_TIME__barBeat);
-	handle->urid.time_bar = handle->map->map(handle->map->handle,
-		LV2_TIME__bar);
-	handle->urid.time_beat = handle->map->map(handle->map->handle,
-		LV2_TIME__beat);
-	handle->urid.time_beatUnit = handle->map->map(handle->map->handle,
-		LV2_TIME__beatUnit);
-	handle->urid.time_beatsPerBar = handle->map->map(handle->map->handle,
-		LV2_TIME__beatsPerBar);
-	handle->urid.time_beatsPerMinute = handle->map->map(handle->map->handle,
-		LV2_TIME__beatsPerMinute);
-	handle->urid.time_frame = handle->map->map(handle->map->handle,
-		LV2_TIME__frame);
-	handle->urid.time_framesPerSecond = handle->map->map(handle->map->handle,
-		LV2_TIME__framesPerSecond);
-	handle->urid.time_speed = handle->map->map(handle->map->handle,
-		LV2_TIME__speed);
-
+	timely_mask_t mask = TIMELY_MASK_BAR_BEAT
+		//| TIMELY_MASK_BAR
+		| TIMELY_MASK_BEAT_UNIT
+		| TIMELY_MASK_BEATS_PER_BAR
+		| TIMELY_MASK_BEATS_PER_MINUTE
+		| TIMELY_MASK_FRAMES_PER_SECOND
+		| TIMELY_MASK_SPEED;
+	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
 	return handle;
@@ -225,118 +249,13 @@ activate(LV2_Handle instance)
 
 	handle->offset = 0.f;
 	handle->play = 0;
-}
-
-static inline void
-_play(plughandle_t *handle, int64_t ref, uint32_t capacity)
-{
-	const LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
-
-	while(handle->ev && !lv2_atom_sequence_is_end(&play_seq->body, play_seq->atom.size, handle->ev))
-	{
-		if(handle->ev->time.frames > handle->offset)
-			break; // event not part of this region
-
-		LV2_Atom_Event *e = lv2_atom_sequence_append_event(handle->event_out,
-			capacity, handle->ev);
-		if(e)
-		{
-			e->time.frames = ref;
-		}
-		else
-			break; // overflow
-
-		handle->ev = lv2_atom_sequence_next(handle->ev);
-	}
-}
-
-static inline void
-_rec(plughandle_t *handle, const LV2_Atom_Event *ev)
-{
-	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
-
-	LV2_Atom_Event *e = lv2_atom_sequence_append_event(rec_seq, BUF_SIZE, ev);
-	if(e)
-	{
-		e->time.frames = (int64_t)handle->offset;
-	}
-	else
-		; // overflow
-}
-
-static inline void
-_reposition_play(plughandle_t *handle)
-{
-	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
-
-	LV2_ATOM_SEQUENCE_FOREACH(play_seq, ev)
-	{
-		if(ev->time.frames >= handle->offset)
-		{
-			// reposition here
-			handle->ev = ev;
-			return;
-		}
-	}
-
-	handle->ev = NULL;
-}
-
-static inline void
-_reposition_rec(plughandle_t *handle)
-{
-	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
-
-	LV2_ATOM_SEQUENCE_FOREACH(rec_seq, ev)
-	{
-		if(ev->time.frames >= handle->offset)
-		{
-			// truncate sequence here
-			rec_seq->atom.size = (uintptr_t)ev - (uintptr_t)&rec_seq->body;
-			return;
-		}
-	}
-}
-
-static inline void
-_update_position(plughandle_t *handle)
-{
-	position_t *pos = &handle->pos;
-
-	handle->frames_per_beat = 240.f / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
-	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
-
-	switch(handle->punch_i)
-	{
-		case PUNCH_BAR:
-		{
-			handle->window = handle->width_i * handle->frames_per_bar;
-
-			handle->offset = 
-				((pos->bar % handle->width_i) * pos->beats_per_bar + pos->bar_beat)
-				* handle->frames_per_beat;
-
-			break;
-		}
-		case PUNCH_BEAT:
-		{
-			handle->window = handle->width_i * handle->frames_per_beat;
-
-			double integral;
-			double beat_beat = modf(pos->bar_beat, &integral);
-			handle->offset = (((int)integral % handle->width_i) + beat_beat)
-				* handle->frames_per_beat; //TODO may overflow if width > beats_per_bar
-
-			break;
-		}
-	}
+	handle->rolling = false;
 }
 
 static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
-	position_t *pos = &handle->pos;
 	uint32_t capacity = handle->event_out->atom.size;
 
 	punchmode_t punch_i = floor(*handle->punch);
@@ -347,79 +266,43 @@ run(LV2_Handle instance, uint32_t nsamples)
 	bool width_has_changed = width_i != handle->width_i;
 	handle->width_i = width_i;
 
-	bool mute_i = floor(*handle->mute);
+	if(punch_has_changed || width_has_changed)
+		_window_refresh(handle);
 
-	if(width_has_changed || punch_has_changed)
-		_update_position(handle);
+	bool mute_i = floor(*handle->mute);
 
 	lv2_atom_sequence_clear(handle->event_out);
 
 	int64_t last_t = 0;
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
+		if(handle->rolling)
+			handle->offset += ev->time.frames - last_t;
+
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
-		int64_t frame = ev->time.frames;
-		bool is_time_position = false;
+		const int time_event = timely_advance(&handle->timely, obj, last_t, ev->time.frames);
 
-		if(  lv2_atom_forge_is_object_type(&handle->forge, obj->atom.type)
-			&& (obj->body.otype == handle->urid.time_position) )
-		{
-			_position_deatomize(handle, obj, pos);
-			_update_position(handle);
-			_reposition_rec(handle);
-			_reposition_play(handle);
-			is_time_position = true;
-		}
+		if(time_event && handle->rolling)
+			_rec(handle, ev); // dont' record time position signals
+	
+		if(!mute_i && handle->rolling)
+			_play(handle, ev->time.frames, capacity);
 
-		if(pos->speed > 0.f)
-		{
-			if(!is_time_position)
-				_rec(handle, ev); // don't record time position signals
-
-			for(int64_t i=last_t; i<frame; i++)
-			{
-				if(!mute_i)
-					_play(handle, i, capacity);
-
-				handle->offset += 1;
-				if(handle->offset >= handle->window)
-				{
-					handle->play ^= 1; // swap buffers;
-					handle->offset -= handle->window;
-					_reposition_rec(handle);
-					_reposition_play(handle);
-				}
-			}
-		}
-
-		last_t = frame;
+		last_t = ev->time.frames;
 	}
 
-	// play the rest
-	if(pos->speed > 0.f)
-	{
-		for(int64_t i=last_t; i<nsamples; i++)
-		{
-			if(!mute_i)
-				_play(handle, i, capacity);
-
-			handle->offset += 1;
-			if(handle->offset >= handle->window)
-			{
-				handle->play ^= 1; // swap buffers;
-				handle->offset -= handle->window;
-				_reposition_rec(handle);
-				_reposition_play(handle);
-			}
-		}
-	}
+	if(handle->rolling)
+		handle->offset += nsamples - last_t;
+	timely_advance(&handle->timely, NULL, last_t, nsamples);
+	if(!mute_i && handle->rolling)
+		_play(handle, nsamples, capacity);
 
 	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
 	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
 
 	*handle->play_capacity = BUF_PERCENT * play_seq->atom.size;
 	*handle->rec_capacity = BUF_PERCENT * rec_seq->atom.size;
-	*handle->play_position = 100.f * handle->offset / handle->window;
+	*handle->play_position = handle->offset * handle->window;
 }
 
 static void

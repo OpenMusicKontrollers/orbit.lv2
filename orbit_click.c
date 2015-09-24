@@ -20,123 +20,80 @@
 #include <math.h>
 
 #include <orbit.h>
+#include <timely.h>
 
 typedef enum _state_t state_t;
 typedef struct _wave_t wave_t;
 typedef struct _plughandle_t plughandle_t;
 
 enum _state_t {
-	STATE_ATTACK,
-	STATE_DECAY,
+	STATE_ON,
 	STATE_OFF
 };
 
 struct _wave_t {
-	bool is_bar;
-	uint32_t wave_offset;  // Current play offset in the wave
 	state_t state;        // Current play state
-	float *wave;
 	uint32_t wave_len;
-	double elapsed_len;  // Frames since the start of the last click
+	uint32_t wave_offset;  // Current play offset in the wave
+	float *wave;
 	float *audio;
 };
 
 struct _plughandle_t {
 	LV2_URID_Map *map;
-
-	struct {
-		LV2_URID time_position;
-		LV2_URID time_barBeat;
-		LV2_URID time_bar;
-		LV2_URID time_beatUnit;
-		LV2_URID time_beatsPerBar;
-		LV2_URID time_beatsPerMinute;
-		LV2_URID time_frame;
-		LV2_URID time_framesPerSecond;
-		LV2_URID time_speed;
-	} urid;
-
 	LV2_Atom_Forge forge;
 
-	position_t pos;
-	double frames_per_beat;
-	double frames_per_bar;
+	timely_t timely;
 
 	const LV2_Atom_Sequence *event_in;
 
 	wave_t beat;
 	wave_t bar;
-
-	uint32_t attack_len;
-	uint32_t decay_len;
+	
+	bool rolling;
 };
 
-static const double attack_s = 0.005;
-static const double decay_s  = 0.075;
+static const float attack_s = 0.005;
+static const float decay_s  = 0.075;
 
-static inline void
-_position_deatomize(plughandle_t *handle, const LV2_Atom_Object *obj, position_t *pos)
+static void
+_cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 {
-	const LV2_Atom* name = NULL;
-	const LV2_Atom* age  = NULL;
+	plughandle_t *handle = data;
 
-	const LV2_Atom_Float *bar_beat = NULL;
-	const LV2_Atom_Long *bar = NULL;
-	const LV2_Atom_Int *beat_unit = NULL;
-	const LV2_Atom_Float *beats_per_bar = NULL;
-	const LV2_Atom_Float *beats_per_minute = NULL;
-	const LV2_Atom_Long *frame = NULL;
-	const LV2_Atom_Float *frames_per_second = NULL;
-	const LV2_Atom_Float *speed = NULL;
-
-	LV2_Atom_Object_Query q [] = {
-		{ handle->urid.time_barBeat, (const LV2_Atom **)&bar_beat },
-		{ handle->urid.time_bar, (const LV2_Atom **)&bar },
-		{ handle->urid.time_beatUnit, (const LV2_Atom **)&beat_unit },
-		{ handle->urid.time_beatsPerBar, (const LV2_Atom **)&beats_per_bar },
-		{ handle->urid.time_beatsPerMinute, (const LV2_Atom **)&beats_per_minute },
-		{ handle->urid.time_frame, (const LV2_Atom **)&frame },
-		{ handle->urid.time_framesPerSecond, (const LV2_Atom **)&frames_per_second },
-		{ handle->urid.time_speed, (const LV2_Atom **)&speed },
-		LV2_ATOM_OBJECT_QUERY_END
-	};
-
-	lv2_atom_object_query(obj, q);
-
-	if(beat_unit)
-		pos->beat_unit = beat_unit->body;
-	if(beats_per_bar)
-		pos->beats_per_bar = beats_per_bar->body;
-	if(beats_per_minute)
-		pos->beats_per_minute = beats_per_minute->body;
-	if(frame)
-		pos->frame = frame->body;
-	if(frames_per_second)
-		pos->frames_per_second = frames_per_second->body;
-	if(speed)
-		pos->speed = speed->body;
-
-	if(bar_beat)
-		pos->bar_beat = bar_beat->body;
-	else // calculate
-		pos->bar_beat = 0.f;
-
-	if(bar)
-		pos->bar = bar->body;
-	else // calculate
-		pos->bar = 0;
+	if(type == TIMELY_URI_SPEED(timely))
+	{
+		handle->rolling = TIMELY_SPEED(timely) > 0.f ? true : false;
+	}
+	else if(type == TIMELY_URI_BAR_BEAT(timely))
+	{
+		double integ;
+		double fract = modf(TIMELY_BAR_BEAT(timely), &integ);
+		if(handle->rolling && (fract == 0.0) )
+		{
+			handle->beat.state = STATE_ON;
+			handle->beat.wave_offset = 0;
+		}
+	}
+	else if(type == TIMELY_URI_BAR(timely))
+	{
+		if(handle->rolling)
+		{
+			handle->bar.state = STATE_ON;
+			handle->bar.wave_offset = 0;
+		}
+	}
 }
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
 {
-	int i;
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
 
-	for(i=0; features[i]; i++)
+	for(unsigned i=0; features[i]; i++)
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
@@ -150,57 +107,40 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	handle->urid.time_position = handle->map->map(handle->map->handle,
-		LV2_TIME__Position);
-	handle->urid.time_barBeat = handle->map->map(handle->map->handle,
-		LV2_TIME__barBeat);
-	handle->urid.time_bar = handle->map->map(handle->map->handle,
-		LV2_TIME__bar);
-	handle->urid.time_beatUnit = handle->map->map(handle->map->handle,
-		LV2_TIME__beatUnit);
-	handle->urid.time_beatsPerBar = handle->map->map(handle->map->handle,
-		LV2_TIME__beatsPerBar);
-	handle->urid.time_beatsPerMinute = handle->map->map(handle->map->handle,
-		LV2_TIME__beatsPerMinute);
-	handle->urid.time_frame = handle->map->map(handle->map->handle,
-		LV2_TIME__frame);
-	handle->urid.time_framesPerSecond = handle->map->map(handle->map->handle,
-		LV2_TIME__framesPerSecond);
-	handle->urid.time_speed = handle->map->map(handle->map->handle,
-		LV2_TIME__speed);
-
+	timely_mask_t mask = TIMELY_MASK_BAR_BEAT | TIMELY_MASK_BAR | TIMELY_MASK_SPEED;
+	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
 	// Initialise instance fields
-	position_t *pos = &handle->pos;
-	pos->frames_per_second = rate;
-	pos->beat_unit = 4;
-	pos->beats_per_bar = 4.f;
-	pos->beats_per_minute = 120.0f;
-	handle->frames_per_beat = 240.f / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
-	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
-
-	handle->attack_len = (uint32_t)(attack_s * rate);
-	handle->decay_len = (uint32_t)(decay_s * rate);
+	const uint32_t attack_len = (uint32_t)(attack_s * rate);
+	const uint32_t decay_len = (uint32_t)(decay_s * rate);
 
 	// Generate one cycle of a sine wave at the desired frequency
-	const double amp = 0.5;
+	const float amp = 0.5;
 
-	const double bar_freq = 440.f * 4.f;
-	handle->bar.is_bar = true;
-	handle->bar.state = STATE_OFF;
-	handle->bar.wave_len = rate / bar_freq;
+	const float bar_freq = 440.f * 4.f;
+	handle->bar.wave_len = attack_len + decay_len;
 	handle->bar.wave = malloc(handle->bar.wave_len * sizeof(float));
-	for(uint32_t i=0; i<handle->bar.wave_len; i++)
+	for(unsigned i=0; i<handle->bar.wave_len; i++)
+	{
 		handle->bar.wave[i] = sin(i * 2.f * M_PI * bar_freq / rate) * amp;
+		if(i < attack_len)
+			handle->bar.wave[i] *= (float)i / attack_len;
+		else // >= attack_len
+			handle->bar.wave[i] *= (float)(handle->bar.wave_len - i) / decay_len;
+	}
 
-	const double beat_freq = 440.0 * 2.f;
-	handle->beat.is_bar = false;
-	handle->beat.state = STATE_OFF;
-	handle->beat.wave_len = rate / beat_freq;
+	const float beat_freq = 440.0 * 2.f;
+	handle->beat.wave_len = attack_len + decay_len;
 	handle->beat.wave = malloc(handle->beat.wave_len * sizeof(float));
-	for(uint32_t i=0; i<handle->beat.wave_len; i++)
+	for(unsigned i=0; i<handle->beat.wave_len; i++)
+	{
 		handle->beat.wave[i] = sin(i * 2.f * M_PI * beat_freq / rate) * amp;
+		if(i < attack_len)
+			handle->beat.wave[i] *= (float)i / attack_len;
+		else // >= attack_len
+			handle->beat.wave[i] *= (float)(handle->beat.wave_len - i) / decay_len;
+	}
 
 	return handle;
 }
@@ -231,129 +171,61 @@ activate(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
-	handle->bar.elapsed_len = 0.f;
-	handle->bar.wave_offset = 0;
 	handle->bar.state = STATE_OFF;
-
-	handle->beat.elapsed_len = 0.f;
-	handle->beat.wave_offset = 0;
 	handle->beat.state = STATE_OFF;
-}
-
-static inline void
-_clear(plughandle_t *handle, wave_t *wave, uint32_t begin, uint32_t end)
-{
-	float *const output = wave->audio;
-
-	memset(output, 0x0, (end - begin) * sizeof(float));
 }
 
 static inline void
 _play(plughandle_t *handle, wave_t *wave, uint32_t begin, uint32_t end)
 {
 	float *const output = wave->audio;
-	position_t *pos = &handle->pos;
 
-	if(pos->speed == 0.f)
-		return;
-
-	for(uint32_t i=begin; i<end; i++)
+	for(unsigned i=begin; i<end; i++)
 	{
 		switch(wave->state)
 		{
-			case STATE_ATTACK:
+			case STATE_ON:
 			{
-				// Amplitude increases from 0..1 until attack_len
-				output[i] += wave->wave[wave->wave_offset] *
-					wave->elapsed_len / handle->attack_len;
-				if(wave->elapsed_len >= handle->attack_len)
-					wave->state = STATE_DECAY;
-
-				break;
-			}
-			case STATE_DECAY:
-			{
-				// Amplitude decreases from 1..0 until attack_len + decay_len
-				output[i] += wave->wave[wave->wave_offset] *
-					(1.f - ((wave->elapsed_len - handle->attack_len) / handle->decay_len));
-				if(wave->elapsed_len >= handle->attack_len + handle->decay_len)
+				if(wave->wave_offset++ < wave->wave_len)
+				{
+					output[i] = wave->wave[wave->wave_offset];
+					break;
+				}
+				else
+				{
 					wave->state = STATE_OFF;
-
-				break;
+					// fall-through
+				}
 			}
 			case STATE_OFF:
 			{
+				output[i] = 0.f;
 				break;
 			}
 		}
-
-		// We continuously play the sine wave regardless of envelope
-		wave->wave_offset = (wave->wave_offset + 1) % wave->wave_len;
-
-		// Update elapsed time and start attack if necessary
-		const double boundary = wave->is_bar
-			? handle->frames_per_bar
-			: handle->frames_per_beat;
-
-		if(++wave->elapsed_len >= boundary)
-		{
-			wave->state = STATE_ATTACK;
-			wave->elapsed_len -= boundary;
-		}
 	}
-}
-
-static inline void
-_update_position(plughandle_t *handle, wave_t *wave, const LV2_Atom_Object *obj)
-{
-	position_t *pos = &handle->pos;
-	double integral;
-
-	_position_deatomize(handle, obj, pos);
-
-	handle->frames_per_beat = 240.f / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
-	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
-
-	wave->elapsed_len = wave->is_bar
-		? pos->bar_beat * handle->frames_per_beat
-		: modf(pos->bar_beat, &integral) * handle->frames_per_beat;
-
-	if(wave->elapsed_len < handle->attack_len)
-		wave->state = STATE_ATTACK;
-	else if(wave->elapsed_len < handle->attack_len + handle->decay_len)
-		wave->state = STATE_DECAY;
-	else
-		wave->state = STATE_OFF;
 }
 
 static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
-
 	uint32_t last_t = 0;
+
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
-		_clear(handle, &handle->bar, last_t, ev->time.frames);
-		_clear(handle, &handle->beat, last_t, ev->time.frames);
 		_play(handle, &handle->bar, last_t, ev->time.frames);
 		_play(handle, &handle->beat, last_t, ev->time.frames);
 
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
-		if(  (obj->atom.type == handle->forge.Object)
-			&& (obj->body.otype == handle->urid.time_position) )
-		{
-			_update_position(handle, &handle->bar, obj);
-			_update_position(handle, &handle->beat, obj);
-		}
+		timely_advance(&handle->timely, obj, last_t, ev->time.frames);
 
 		last_t = ev->time.frames;
 	}
 
-	_clear(handle, &handle->bar, last_t, nsamples);
-	_clear(handle, &handle->beat, last_t, nsamples);
 	_play(handle, &handle->bar, last_t, nsamples);
 	_play(handle, &handle->beat, last_t, nsamples);
+	timely_advance(&handle->timely, NULL, last_t, nsamples);
 }
 
 static void
@@ -361,6 +233,8 @@ cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
+	free(handle->bar.wave);
+	free(handle->beat.wave);
 	free(handle);
 }
 
