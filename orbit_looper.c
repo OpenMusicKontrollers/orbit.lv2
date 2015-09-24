@@ -164,6 +164,9 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 			handle->offset = fmod(beats, handle->width_i * TIMELY_BEATS_PER_BAR(timely))
 				* TIMELY_FRAMES_PER_BEAT(timely);
 
+		if(handle->offset == 0)
+			handle->play ^= 1;
+
 		_reposition_rec(handle);
 		_reposition_play(handle);
 	}
@@ -282,7 +285,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 		const int time_event = timely_advance(&handle->timely, obj, last_t, ev->time.frames);
 
-		if(time_event && handle->rolling)
+		if(!time_event && handle->rolling)
 			_rec(handle, ev); // dont' record time position signals
 	
 		if(!mute_i && handle->rolling)
