@@ -108,7 +108,9 @@ _reposition_play(plughandle_t *handle)
 
 	LV2_ATOM_SEQUENCE_FOREACH(play_seq, ev)
 	{
-		if(ev->time.frames >= handle->offset)
+		const int64_t beat_frames = ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
+
+		if(beat_frames >= handle->offset)
 		{
 			// reposition here
 			handle->ev = ev;
@@ -126,7 +128,9 @@ _reposition_rec(plughandle_t *handle)
 
 	LV2_ATOM_SEQUENCE_FOREACH(rec_seq, ev)
 	{
-		if(ev->time.frames >= handle->offset)
+		const int64_t beat_frames = ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
+
+		if(beat_frames >= handle->offset)
 		{
 			// truncate sequence here
 			rec_seq->atom.size = (uintptr_t)ev - (uintptr_t)&rec_seq->body;
