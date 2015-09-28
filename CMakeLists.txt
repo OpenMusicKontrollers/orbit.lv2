@@ -6,12 +6,14 @@ include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/timely.lv2)
 include_directories(${PROJECT_BINARY_DIR})
 
-set(CMAKE_C_FLAGS "-std=gnu99 -fvisibility=hidden ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-std=gnu99 -Wextra -Wno-unused-parameter -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-Wshadow -Wimplicit-function-declaration -Wredundant-decls -Wmissing-prototypes -Wstrict-prototypes ${CMAKE_C_FLAGS}")
+set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,nodelete ${CMAKE_MODULE_LINKER_FLAGS}")
 add_definitions("-D_GNU_SOURCE=1") # asprintf
 
 set(ORBIT_MAJOR_VERSION 0)
 set(ORBIT_MINOR_VERSION 1)
-set(ORBIT_MICRO_VERSION 0)
+set(ORBIT_MICRO_VERSION 1)
 set(ORBIT_VERSION "${ORBIT_MAJOR_VERSION}.${ORBIT_MINOR_VERSION}.${ORBIT_MICRO_VERSION}")
 add_definitions("-DORBIT_VERSION=\"${ORBIT_VERSION}\"")
 

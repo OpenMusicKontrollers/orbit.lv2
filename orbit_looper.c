@@ -81,7 +81,9 @@ _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 			e->time.frames = beat_frames - ref;
 		}
 		else
+		{
 			break; // overflow
+		}
 
 		handle->ev = lv2_atom_sequence_next(handle->ev);
 	}
@@ -98,7 +100,9 @@ _rec(plughandle_t *handle, const LV2_Atom_Event *ev)
 		e->time.beats = handle->offset / TIMELY_FRAMES_PER_BEAT(&handle->timely);
 	}
 	else
-		; // overflow
+	{
+		// overflow
+	}
 }
 
 static inline void
