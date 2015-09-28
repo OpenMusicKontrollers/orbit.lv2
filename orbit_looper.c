@@ -69,14 +69,16 @@ _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 
 	while(handle->ev && !lv2_atom_sequence_is_end(&play_seq->body, play_seq->atom.size, handle->ev))
 	{
-		if(handle->ev->time.frames >= handle->offset)
+		const int64_t beat_frames = handle->ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
+
+		if(beat_frames >= handle->offset)
 			break; // event not part of this region
 
 		LV2_Atom_Event *e = lv2_atom_sequence_append_event(handle->event_out,
 			capacity, handle->ev);
 		if(e)
 		{
-			e->time.frames -= ref;
+			e->time.frames = beat_frames - ref;
 		}
 		else
 			break; // overflow
@@ -93,7 +95,7 @@ _rec(plughandle_t *handle, const LV2_Atom_Event *ev)
 	LV2_Atom_Event *e = lv2_atom_sequence_append_event(rec_seq, BUF_SIZE, ev);
 	if(e)
 	{
-		e->time.frames = handle->offset;
+		e->time.beats = handle->offset / TIMELY_FRAMES_PER_BEAT(&handle->timely);
 	}
 	else
 		; // overflow
