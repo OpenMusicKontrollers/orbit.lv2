@@ -51,26 +51,27 @@ struct _plughandle_t {
 		LV2_URID time_frame;
 		LV2_URID time_framesPerSecond;
 		LV2_URID time_speed;
+
+		LV2_URID midi_MidiEvent;
 	} urid;
 
 	LV2_Atom_Forge forge;
 	position_t pos;
 
-	double frames_per_bar;
-	double frames_per_beat;
-	double rel;
+	int64_t last_frame;
+	int64_t frames_per_beat;
 
+	double bpm0;
+	double bpm1;
+	double bpm00;
+	double bpm11;
+
+	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
 	const float *beat_unit;
 	const float *beats_per_bar;
-	const float *beats_per_minute;
-	const float *rolling;
-	const float *rewind;
-
-	int beat_unit_i;
-	int beats_per_bar_i;
-	int beats_per_minute_i;
-	bool rolling_i;
+	const float *stiffness;
+	float *beats_per_minute;
 };
 
 static inline void
@@ -152,6 +153,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		LV2_TIME__framesPerSecond);
 	handle->urid.time_speed = handle->map->map(handle->map->handle,
 		LV2_TIME__speed);
+	
+	handle->urid.midi_MidiEvent = handle->map->map(handle->map->handle,
+		LV2_MIDI__MidiEvent);
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
@@ -166,22 +170,22 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 	switch(port)
 	{
 		case 0:
-			handle->event_out = (LV2_Atom_Sequence *)data;
+			handle->event_in = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->beat_unit = (const float *)data;
+			handle->event_out = (LV2_Atom_Sequence *)data;
 			break;
 		case 2:
-			handle->beats_per_bar = (const float *)data;
+			handle->beat_unit = (const float *)data;
 			break;
 		case 3:
-			handle->beats_per_minute = (const float *)data;
+			handle->beats_per_bar = (const float *)data;
 			break;
 		case 4:
-			handle->rolling = (const float *)data;
+			handle->stiffness = (const float *)data;
 			break;
 		case 5:
-			handle->rewind = (const float *)data;
+			handle->beats_per_minute = (float *)data;
 			break;
 		default:
 			break;
@@ -194,17 +198,14 @@ activate(LV2_Handle instance)
 	plughandle_t *handle = instance;
 	position_t *pos = &handle->pos;
 
-	pos->frame = 0;
-	pos->bar = 0;
-	pos->bar_beat = 0.f;
-
 	pos->beat_unit = 4;
-	pos->beats_per_bar = 4.f;
-	pos->beats_per_minute = 120.0f;
+	pos->beats_per_bar = 4;
 
-	handle->frames_per_beat = 240.0 / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
-	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
-	handle->rel = 0.0;
+	handle->last_frame = 0;
+	handle->bpm0 = 0.0;
+	handle->bpm1 = 0.0;
+	handle->bpm00 = 0.0;
+	handle->bpm11 = 0.0;
 }
 
 static void
@@ -217,69 +218,50 @@ run(LV2_Handle instance, uint32_t nsamples)
 	LV2_Atom_Forge_Frame frame;
 	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
 	lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
-
-	int beat_unit_i = floor(*handle->beat_unit);
-	int beats_per_bar_i = floor(*handle->beats_per_bar);
-	int beats_per_minute_i = floor(*handle->beats_per_minute);
-	bool rolling_i = floor(*handle->rolling);
-	bool rewind_i = floor(*handle->rewind);
-
-	int needs_update = 0;
-
-	if(beat_unit_i != handle->beat_unit_i)
-		needs_update = 1;
-	if(beats_per_bar_i != handle->beats_per_bar_i)
-		needs_update = 1;
-	if(beats_per_minute_i != handle->beats_per_minute_i)
-		needs_update = 1;
-	if(rolling_i != handle->rolling_i)
-		needs_update = 1;
-
-	if(needs_update)
+	
+	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
-		// derive position as fractional bar
-		double bar_frac = handle->rel / handle->frames_per_bar;
-
-		pos->beat_unit = beat_unit_i;
-		pos->beats_per_bar = beats_per_bar_i;
-		pos->beats_per_minute = beats_per_minute_i;
-		pos->speed = rolling_i ? 1.f : 0.f;
-
-		if(rolling_i && !handle->rolling_i && rewind_i) // start rolling
+		const LV2_Atom *atom = &ev->body;
+		if(atom->type == handle->urid.midi_MidiEvent)
 		{
-			bar_frac = 0.0;
-			pos->frame = 0; // reset frame pointer
-			pos->bar = 0; // reset bar
-			handle->rel = 0.0;
+			const uint8_t *midi = LV2_ATOM_BODY_CONST(atom);
+			if(midi[0] == LV2_MIDI_MSG_CLOCK)
+			{
+				const int64_t cur_frame = pos->frame + ev->time.frames;
+				handle->frames_per_beat = cur_frame - handle->last_frame;
+				handle->last_frame = cur_frame;
+		
+				handle->bpm1 = 240.0 / handle->frames_per_beat * pos->frames_per_second
+					/ pos->beat_unit;
+			}
 		}
-		pos->bar_beat = pos->beats_per_bar * bar_frac;
+	}
 
+	const double Ds = 1.0 / *handle->stiffness;
+
+	handle->bpm11 = Ds * (handle->bpm0 + handle->bpm1) / 2 + handle->bpm00 * (1.0 - Ds);
+
+	handle->bpm0 = handle->bpm1;
+	handle->bpm00 = handle->bpm11;
+
+	bool bpm_has_changed = fabs(pos->beats_per_minute - handle->bpm11) >= 1.0;
+	bool beat_unit_changed = pos->beat_unit != *handle->beat_unit;
+	bool beats_per_bar_changed = pos->beats_per_bar !=  *handle->beats_per_bar;
+
+	if(bpm_has_changed || beat_unit_changed || beats_per_bar_changed)
+	{
+		//printf("things have changed\n");
+		pos->beats_per_minute = floor(handle->bpm11);
+		pos->beat_unit = *handle->beat_unit;
+		pos->beats_per_bar = *handle->beats_per_bar;
+		pos->speed = pos->beats_per_minute > 0 ? 1.f : 0.f;
 		_position_atomize(handle, &handle->forge, pos);
-
-		handle->beat_unit_i = beat_unit_i;
-		handle->beats_per_bar_i = beats_per_bar_i;
-		handle->beats_per_minute_i = beats_per_minute_i;
-		handle->rolling_i = rolling_i;
-
-		// update frames_per_beat and frames_per_bar
-		handle->frames_per_beat = 240.0 / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
-		handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 	}
 
-	if(pos->speed > 0.f)
-	{
-		// update frame position
-		pos->frame += nsamples * pos->speed;
+	*handle->beats_per_minute = pos->beats_per_minute;
 
-		// update rel position
-		handle->rel += nsamples;
-		if(handle->rel >= handle->frames_per_bar)
-		{
-			pos->bar += 1;
-			handle->rel -= handle->frames_per_bar;
-		}
-	}
-
+	pos->frame += nsamples;
+	
 	lv2_atom_forge_pop(&handle->forge, &frame);
 }
 
@@ -291,8 +273,8 @@ cleanup(LV2_Handle instance)
 	free(handle);
 }
 
-const LV2_Descriptor orbit_pacemaker = {
-	.URI						= ORBIT_PACEMAKER_URI,
+const LV2_Descriptor orbit_tapdancer = {
+	.URI						= ORBIT_TAPDANCER_URI,
 	.instantiate		= instantiate,
 	.connect_port		= connect_port,
 	.activate				= activate,

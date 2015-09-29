@@ -33,6 +33,8 @@ lv2_descriptor(uint32_t index)
 			return &orbit_click;
 		case 2:
 			return &orbit_pacemaker;
+		case 3:
+			return &orbit_tapdancer;
 		default:
 			return NULL;
 	}
