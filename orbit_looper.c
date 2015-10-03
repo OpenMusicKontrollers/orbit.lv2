@@ -23,7 +23,7 @@
 #include <timely.h>
 
 #define BUF_SIZE 0x1000000 // 16 MB
-#define BUF_PERCENT (100.f / BUF_SIZE)
+#define BUF_PERCENT (100.f / (BUF_SIZE - sizeof(LV2_Atom)))
 
 typedef enum _punchmode_t punchmode_t;
 typedef struct _plughandle_t plughandle_t;
@@ -263,6 +263,19 @@ activate(LV2_Handle instance)
 	handle->offset = 0.f;
 	handle->play = 0;
 	handle->rolling = false;
+
+	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
+	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
+
+	play_seq->atom.type = handle->forge.Sequence;
+	play_seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
+	play_seq->body.unit = 0;
+	play_seq->body.pad = 0;
+
+	rec_seq->atom.type = handle->forge.Sequence;
+	rec_seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
+	rec_seq->body.unit = 0;
+	rec_seq->body.pad = 0;
 }
 
 static void
