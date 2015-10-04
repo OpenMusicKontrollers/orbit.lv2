@@ -21,6 +21,8 @@
 
 #include <orbit.h>
 
+#include <lv2_osc.h>
+
 typedef struct _position_t position_t;
 typedef struct _plughandle_t plughandle_t;
 
@@ -51,15 +53,16 @@ struct _plughandle_t {
 		LV2_URID time_frame;
 		LV2_URID time_framesPerSecond;
 		LV2_URID time_speed;
-
-		LV2_URID midi_MidiEvent;
 	} urid;
+
+	osc_forge_t oforge;
 
 	LV2_Atom_Forge forge;
 	position_t pos;
 
 	int64_t last_frame;
 	int64_t frames_per_beat;
+	bool tapped;
 
 	double bpm0;
 	double bpm1;
@@ -153,11 +156,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		LV2_TIME__framesPerSecond);
 	handle->urid.time_speed = handle->map->map(handle->map->handle,
 		LV2_TIME__speed);
-	
-	handle->urid.midi_MidiEvent = handle->map->map(handle->map->handle,
-		LV2_MIDI__MidiEvent);
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
+	osc_forge_init(&handle->oforge, handle->map);
 
 	return handle;
 }
@@ -208,6 +209,34 @@ activate(LV2_Handle instance)
 	handle->bpm11 = 0.0;
 }
 
+typedef struct _evs_t evs_t;
+struct _evs_t {
+	plughandle_t *handle;
+	const LV2_Atom_Event *ev;
+};
+
+static void
+_message(const char *path, const char *fmt, const LV2_Atom_Tuple *tup, void *data)
+{
+	const evs_t *evs = data;
+	plughandle_t *handle = evs->handle;
+	position_t *pos = &handle->pos;
+	const LV2_Atom_Event *ev = evs->ev;
+
+	if(!strcmp(path, "/tap"))
+	{
+		const int64_t cur_frame = pos->frame + ev->time.frames;
+		handle->frames_per_beat = cur_frame - handle->last_frame;
+		handle->last_frame = cur_frame;
+
+		handle->bpm1 = 240.0 / handle->frames_per_beat * pos->frames_per_second
+			/ pos->beat_unit;
+
+		pos->bar_beat += 1.0;
+		handle->tapped = true;
+	}
+}
+
 static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
@@ -218,29 +247,21 @@ run(LV2_Handle instance, uint32_t nsamples)
 	LV2_Atom_Forge_Frame frame;
 	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
 	lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
-	
+
+	handle->tapped = false;
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
-		const LV2_Atom *atom = &ev->body;
-		if(atom->type == handle->urid.midi_MidiEvent)
-		{
-			const uint8_t *midi = LV2_ATOM_BODY_CONST(atom);
-			if(midi[0] == LV2_MIDI_MSG_CLOCK)
-			{
-				const int64_t cur_frame = pos->frame + ev->time.frames;
-				handle->frames_per_beat = cur_frame - handle->last_frame;
-				handle->last_frame = cur_frame;
-		
-				handle->bpm1 = 240.0 / handle->frames_per_beat * pos->frames_per_second
-					/ pos->beat_unit;
-			}
-		}
+		const LV2_Atom_Object *atom = (const LV2_Atom_Object *)&ev->body;
+
+		const evs_t evs = {
+			.handle = handle,
+			.ev = ev
+		};
+		osc_atom_event_unroll(&handle->oforge, atom, NULL, NULL, _message, (void *)&evs);
 	}
 
 	const double Ds = 1.0 / *handle->stiffness;
-
 	handle->bpm11 = Ds * (handle->bpm0 + handle->bpm1) / 2 + handle->bpm00 * (1.0 - Ds);
-
 	handle->bpm0 = handle->bpm1;
 	handle->bpm00 = handle->bpm11;
 
@@ -248,13 +269,18 @@ run(LV2_Handle instance, uint32_t nsamples)
 	bool beat_unit_changed = pos->beat_unit != *handle->beat_unit;
 	bool beats_per_bar_changed = pos->beats_per_bar !=  *handle->beats_per_bar;
 
-	if(bpm_has_changed || beat_unit_changed || beats_per_bar_changed)
+	if(handle->tapped || bpm_has_changed || beat_unit_changed || beats_per_bar_changed)
 	{
 		//printf("things have changed\n");
-		pos->beats_per_minute = floor(handle->bpm11);
+		pos->beats_per_minute = round(handle->bpm11);
 		pos->beat_unit = *handle->beat_unit;
 		pos->beats_per_bar = *handle->beats_per_bar;
 		pos->speed = pos->beats_per_minute > 0 ? 1.f : 0.f;
+		while(pos->bar_beat >= pos->beats_per_bar)
+		{
+			pos->bar_beat -= pos->beats_per_bar;
+			pos->bar += 1;
+		}
 		_position_atomize(handle, &handle->forge, pos);
 	}
 

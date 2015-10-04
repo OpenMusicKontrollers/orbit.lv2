@@ -237,8 +237,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	if(needs_update)
 	{
-		// derive position as fractional bar
-		double bar_frac = handle->rel / handle->frames_per_bar;
+		// derive current position as bar_beat
+		pos->bar_beat = handle->rel / handle->frames_per_bar * pos->beats_per_bar;
 
 		pos->beat_unit = beat_unit_i;
 		pos->beats_per_bar = beats_per_bar_i;
@@ -247,12 +247,19 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 		if(rolling_i && !handle->rolling_i && rewind_i) // start rolling
 		{
-			bar_frac = 0.0;
 			pos->frame = 0; // reset frame pointer
 			pos->bar = 0; // reset bar
+			pos->bar_beat = 0.f; // reset beat
 			handle->rel = 0.0;
 		}
-		pos->bar_beat = pos->beats_per_bar * bar_frac;
+
+		if(pos->bar_beat >= pos->beats_per_bar) // move to end of bar if beat overflows bar
+		{
+			double integral;
+			float frac = modf(pos->bar_beat, &integral);
+			(void)integral;
+			pos->bar_beat = pos->beats_per_bar - 1.f + frac;
+		}
 
 		_position_atomize(handle, &handle->forge, pos);
 
