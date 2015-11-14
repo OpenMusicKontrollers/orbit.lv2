@@ -35,6 +35,8 @@ lv2_descriptor(uint32_t index)
 			return &orbit_pacemaker;
 		case 3:
 			return &orbit_tapdancer;
+		case 4:
+			return &orbit_cargoship;
 		default:
 			return NULL;
 	}

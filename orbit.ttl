@@ -342,3 +342,73 @@ orbit:tapdancer
 		lv2:portProperty lv2:integer ;
 		units:unit units:bpm ;
 	] .
+
+# Cargoship Plugin
+orbit:cargoship
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Orbit Cargoship" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:orbit ;
+	lv2:requiredFeature urid:map ;
+	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+
+	lv2:port [
+		# sink event port
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		atom:supports time:Position ;
+		atom:supports atom:Object ;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event Input" ;
+		lv2:designation lv2:control ;
+	] , [
+		# source event port
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		atom:supports time:Position ;
+		atom:supports atom:Object ;
+		lv2:index 1 ;
+		lv2:symbol "event_out" ;
+		lv2:name "Event Output" ;
+		lv2:designation lv2:control ;
+	] , [
+		# control input ports
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 2 ;
+		lv2:symbol "punch_mode" ;
+		lv2:name "Punch Mode" ;
+		lv2:default 1.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 1.0 ;
+		lv2:portProperty lv2:integer;
+		lv2:portProperty lv2:enumeration;
+		lv2:scalePoint [ rdfs:label "Beat" ;					rdf:value 0 ] ;
+		lv2:scalePoint [ rdfs:label "Bar" ;						rdf:value 1 ] ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 3 ;
+		lv2:symbol "mute" ;
+		lv2:name "Mute" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		lv2:portProperty lv2:toggled;
+	] , [
+	  a lv2:OutputPort ,
+			lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "play_position" ;
+		lv2:name "Playback Position" ;
+		lv2:default 0.0 ;
+		lv2:minimum 0.0 ;
+		lv2:maximum 100.0 ;
+		units:unit units:pc ;
+	] .
