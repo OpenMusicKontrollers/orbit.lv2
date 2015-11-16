@@ -5,6 +5,7 @@ project(orbit.lv2)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/timely.lv2)
 include_directories(${PROJECT_SOURCE_DIR}/osc.lv2)
+include_directories(${PROJECT_SOURCE_DIR}/varchunk)
 include_directories(${PROJECT_BINARY_DIR})
 
 set(CMAKE_C_FLAGS "-std=gnu99 -Wextra -Wno-unused-parameter -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
@@ -28,6 +29,10 @@ else()
 endif()
 
 find_package(PkgConfig) # ${PKG_CONFIG_FOUND}
+
+pkg_search_module(ZLIB REQUIRED zlib)
+include_directories(${ZLIB_INCLUDE_DIRS})
+set(LIBS ${LIBS} ${ZLIB_LDFLAGS})
 
 # orbit
 add_library(orbit MODULE

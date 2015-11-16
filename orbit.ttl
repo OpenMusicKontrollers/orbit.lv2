@@ -24,6 +24,8 @@
 @prefix midi:			<http://lv2plug.in/ns/ext/midi#> .
 @prefix urid:			<http://lv2plug.in/ns/ext/urid#> .
 @prefix units:		<http://lv2plug.in/ns/extensions/units#> .
+@prefix work:			<http://lv2plug.in/ns/ext/worker#> .
+@prefix state:		<http://lv2plug.in/ns/ext/state#> .
 
 @prefix lic:			<http://opensource.org/licenses/> .
 @prefix omk:			<http://open-music-kontrollers.ch/ventosus#> .
@@ -350,7 +352,8 @@ orbit:cargoship
 	doap:name "Orbit Cargoship" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map ;
+	lv2:extensionData work:interface, state:interface ;
+	lv2:requiredFeature work:schedule, urid:map, state:makePath ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
 
 	lv2:port [
@@ -395,20 +398,10 @@ orbit:cargoship
 	  a lv2:InputPort ,
 			lv2:ControlPort ;
 		lv2:index 3 ;
-		lv2:symbol "mute" ;
-		lv2:name "Mute" ;
-		lv2:default 0 ;
+		lv2:symbol "record" ;
+		lv2:name "Record" ;
+		lv2:default 1 ;
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled;
-	] , [
-	  a lv2:OutputPort ,
-			lv2:ControlPort ;
-		lv2:index 4 ;
-		lv2:symbol "play_position" ;
-		lv2:name "Playback Position" ;
-		lv2:default 0.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 100.0 ;
-		units:unit units:pc ;
 	] .

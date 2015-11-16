@@ -18,18 +18,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <zlib.h>
 
 #include <orbit.h>
 #include <timely.h>
+#include <varchunk.h>
 
-#define BUF_SIZE 0x1000000 // 16 MB
+#define BUF_SIZE 0x10000
 
 typedef enum _punchmode_t punchmode_t;
+typedef enum _jobtype_t jobtype_t;
+typedef struct _job_t job_t;
 typedef struct _plughandle_t plughandle_t;
 
 enum _punchmode_t {
-	PUNCH_BEAT				= 0,
-	PUNCH_BAR					= 1
+	PUNCH_BEAT			= 0,
+	PUNCH_BAR				= 1
+};
+
+enum _jobtype_t {
+	JOB_PLAY				= 0,
+	JOB_RECORD			= 1,
+	JOB_SEEK 				= 2,
+	JOB_OPEN				= 3,
+	JOB_DRAIN				= 4
+};
+
+struct _job_t {
+	jobtype_t type;
+	union {
+		double beats;
+	};
 };
 
 struct _plughandle_t {
@@ -38,6 +57,7 @@ struct _plughandle_t {
 	
 	struct {
 		LV2_URID orbit_path;
+		LV2_URID orbit_drain;
 	} uris;
 	
 	timely_t timely;
@@ -47,116 +67,156 @@ struct _plughandle_t {
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
 	const float *punch;
-	const float *mute;
-	float *play_position;
+	const float *record;
 
 	punchmode_t punch_i;
+	bool record_i;
 	unsigned count_i;
-	float window;
 	int64_t offset;
 
-	unsigned play;
 	bool rolling;
-	uint8_t buf [2][BUF_SIZE];
-	LV2_Atom_Event *ev;
-	
+	int draining;
+
 	char path [1024];
+	gzFile io;
+
+	varchunk_t *to_disk;
+	varchunk_t *from_disk;
 };
+
+static inline LV2_Worker_Status
+_trigger_job(plughandle_t *handle, const job_t *job)
+{
+	return handle->sched->schedule_work(handle->sched->handle, sizeof(job_t), job);
+}
+
+static inline LV2_Worker_Status
+_trigger_record(plughandle_t *handle)
+{
+	const job_t job = {
+		.type = JOB_RECORD
+	};
+
+	return _trigger_job(handle, &job);
+}
+
+static inline LV2_Worker_Status
+_trigger_play(plughandle_t *handle)
+{
+	const job_t job = {
+		.type = JOB_PLAY
+	};
+
+	return _trigger_job(handle, &job);
+}
+
+static inline LV2_Worker_Status
+_trigger_seek(plughandle_t *handle, double beats)
+{
+	const job_t job = {
+		.type = JOB_SEEK,
+		.beats = beats
+	};
+
+	return _trigger_job(handle, &job);
+}
+
+static inline LV2_Worker_Status
+_trigger_open(plughandle_t *handle)
+{
+	const job_t job = {
+		.type = JOB_OPEN
+	};
+
+	return _trigger_job(handle, &job);
+}
+
+static inline LV2_Worker_Status
+_trigger_drain(plughandle_t *handle)
+{
+	const job_t job = {
+		.type = JOB_DRAIN
+	};
+
+	return _trigger_job(handle, &job);
+}
 
 static inline void
 _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 {
-	const LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
-
 	const int64_t ref = handle->offset - to; // beginning of current period
 
-	while(handle->ev && !lv2_atom_sequence_is_end(&play_seq->body, play_seq->atom.size, handle->ev))
+	const LV2_Atom_Event *src;
+	size_t len;
+	while((src = varchunk_read_request(handle->from_disk, &len)))
 	{
-		const int64_t beat_frames = handle->ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
+		if(handle->draining > 0)
+		{
+			printf("draining: %u\n", handle->draining);
+			if(src->body.type == handle->uris.orbit_drain)
+				handle->draining -= 1;
+
+			varchunk_read_advance(handle->from_disk);
+			continue;
+		}
+
+		const int64_t beat_frames = src->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
+
+		//printf("event: %lf %li | %li\n", src->time.beats, beat_frames, handle->offset);
 
 		if(beat_frames >= handle->offset)
 			break; // event not part of this region
 
-		LV2_Atom_Event *e = lv2_atom_sequence_append_event(handle->event_out,
-			capacity, handle->ev);
-		if(e)
+		LV2_Atom_Event *dst = lv2_atom_sequence_append_event(handle->event_out,
+			capacity, src);
+		if(dst)
 		{
-			e->time.frames = beat_frames - ref;
+			dst->time.frames = beat_frames - ref;
+
+			if(dst->time.frames < 0)
+			{
+				fprintf(stderr, "event late %li\n", dst->time.frames);
+				dst->time.frames = 0;
+			}
 		}
 		else
-		{
 			break; // overflow
-		}
 
-		handle->ev = lv2_atom_sequence_next(handle->ev);
+		varchunk_read_advance(handle->from_disk);
 	}
 }
 
 static inline void
-_rec(plughandle_t *handle, const LV2_Atom_Event *ev)
+_rec(plughandle_t *handle, const LV2_Atom_Event *src)
 {
-	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
-
-	LV2_Atom_Event *e = lv2_atom_sequence_append_event(rec_seq, BUF_SIZE, ev);
-	if(e)
+	// add event to ring buffer
+	LV2_Atom_Event *dst;
+	size_t len = sizeof(LV2_Atom_Event) + src->body.size;
+	if((dst = varchunk_write_request(handle->to_disk, len)))
 	{
-		e->time.beats = handle->offset / TIMELY_FRAMES_PER_BEAT(&handle->timely);
-	}
-	else
-	{
-		// overflow
-	}
-}
-
-static inline void
-_reposition_play(plughandle_t *handle)
-{
-	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
-
-	LV2_ATOM_SEQUENCE_FOREACH(play_seq, ev)
-	{
-		const int64_t beat_frames = ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
-
-		if(beat_frames >= handle->offset)
-		{
-			// reposition here
-			handle->ev = ev;
-			return;
-		}
-	}
-
-	handle->ev = NULL;
-}
-
-static inline void
-_reposition_rec(plughandle_t *handle)
-{
-	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
-
-	LV2_ATOM_SEQUENCE_FOREACH(rec_seq, ev)
-	{
-		const int64_t beat_frames = ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
-
-		if(beat_frames >= handle->offset)
-		{
-			// truncate sequence here
-			rec_seq->atom.size = (uintptr_t)ev - (uintptr_t)&rec_seq->body;
-			return;
-		}
+		dst->time.beats = handle->offset / TIMELY_FRAMES_PER_BEAT(&handle->timely);
+		dst->body.type = src->body.type;
+		dst->body.size = src->body.size;
+		memcpy(LV2_ATOM_BODY(&dst->body), LV2_ATOM_BODY_CONST(&src->body), src->body.size);
+		varchunk_write_advance(handle->to_disk, len);
 	}
 }
 
 static inline void
-_window_refresh(plughandle_t *handle)
+_reposition_play(plughandle_t *handle, double beats)
 {
-	timely_t *timely = &handle->timely;
+	if(beats == 0.0)
+	{
+		handle->draining += 1;
+		_trigger_drain(handle);
+	}
+	_trigger_seek(handle, beats);
+}
 
-	/*FIXME
-	if(handle->punch_i == PUNCH_BEAT)
-		handle->window = 100.f / (handle->width_i * TIMELY_FRAMES_PER_BEAT(timely));
-	else if(handle->punch_i == PUNCH_BAR)
-		handle->window = 100.f / (handle->width_i * TIMELY_FRAMES_PER_BAR(timely));
-	*/
+static inline void
+_reposition_rec(plughandle_t *handle, double beats)
+{
+	_trigger_seek(handle, beats);
 }
 
 static void
@@ -173,22 +233,14 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		double beats = (double)TIMELY_BAR(timely) * TIMELY_BEATS_PER_BAR(timely)
 			+ TIMELY_BAR_BEAT(timely);
 
-		/*FIXME
 		if(handle->punch_i == PUNCH_BEAT)
-			handle->offset = fmod(beats, handle->width_i) * TIMELY_FRAMES_PER_BEAT(timely);
+			handle->offset = beats * TIMELY_FRAMES_PER_BEAT(timely);
 		else if(handle->punch_i == PUNCH_BAR)
-			handle->offset = fmod(beats, handle->width_i * TIMELY_BEATS_PER_BAR(timely))
-				* TIMELY_FRAMES_PER_BEAT(timely);
-		*/
+			handle->offset = beats * TIMELY_FRAMES_PER_BEAT(timely); //FIXME
 
-		if(handle->offset == 0)
-			handle->play ^= 1;
-
-		_reposition_rec(handle);
-		_reposition_play(handle);
+		//_reposition_rec(handle, beats); FIXME
+		_reposition_play(handle, beats);
 	}
-
-	_window_refresh(handle);
 }
 
 static LV2_Handle
@@ -243,12 +295,21 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
-	char *tmp = make_path->path(make_path->handle, "dump.atom");
+	char *tmp = make_path->path(make_path->handle, "seq.gz");
 	strcpy(handle->path, tmp);
 	free(tmp);
+
+	if(!(handle->io = gzopen(handle->path, "r")))
+	{
+		free(handle);
+		return NULL;
+	}
 	
-	handle->uris.orbit_path = handle->map->map(handle->map->handle,
-		ORBIT_PATH_URI);
+	handle->uris.orbit_path = handle->map->map(handle->map->handle, ORBIT_PATH_URI);
+	handle->uris.orbit_drain = handle->map->map(handle->map->handle, ORBIT_DRAIN_URI);
+
+	handle->to_disk = varchunk_new(BUF_SIZE);
+	handle->from_disk = varchunk_new(BUF_SIZE);
 
 	return handle;
 }
@@ -270,10 +331,7 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->punch = (const float *)data;
 			break;
 		case 3:
-			handle->mute = (const float *)data;
-			break;
-		case 4:
-			handle->play_position = (float *)data;
+			handle->record = (const float *)data;
 			break;
 		default:
 			break;
@@ -286,21 +344,8 @@ activate(LV2_Handle instance)
 	plughandle_t *handle = instance;
 
 	handle->offset = 0.f;
-	handle->play = 0;
 	handle->rolling = false;
-
-	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
-	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
-
-	play_seq->atom.type = handle->forge.Sequence;
-	play_seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
-	play_seq->body.unit = 0;
-	play_seq->body.pad = 0;
-
-	rec_seq->atom.type = handle->forge.Sequence;
-	rec_seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
-	rec_seq->body.unit = 0;
-	rec_seq->body.pad = 0;
+	handle->restored = true;
 }
 
 static void
@@ -313,16 +358,16 @@ run(LV2_Handle instance, uint32_t nsamples)
 	bool punch_has_changed = punch_i != handle->punch_i;
 	handle->punch_i = punch_i;
 
-	/* FIXME
-	int64_t width_i = floor(*handle->width);
-	bool width_has_changed = width_i != handle->width_i;
-	handle->width_i = width_i;
+	bool record_i = floor(*handle->record);
+	bool record_has_changed = record_i != handle->record_i;
+	handle->record_i = record_i;
 
-	if(punch_has_changed || width_has_changed)
-		_window_refresh(handle);
-	*/
-
-	bool mute_i = floor(*handle->mute);
+	// trigger pre triggers
+	if(handle->restored)
+	{
+		_trigger_open(handle);
+		handle->restored = false;
+	}
 
 	lv2_atom_sequence_clear(handle->event_out);
 
@@ -335,10 +380,10 @@ run(LV2_Handle instance, uint32_t nsamples)
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 		const int time_event = timely_advance(&handle->timely, obj, last_t, ev->time.frames);
 
-		if(!time_event && handle->rolling)
+		if(record_i && !time_event && handle->rolling)
 			_rec(handle, ev); // dont' record time position signals
 	
-		if(!mute_i && handle->rolling)
+		if(!record_i && handle->rolling)
 			_play(handle, ev->time.frames, capacity);
 
 		last_t = ev->time.frames;
@@ -347,19 +392,31 @@ run(LV2_Handle instance, uint32_t nsamples)
 	if(handle->rolling)
 		handle->offset += nsamples - last_t;
 	timely_advance(&handle->timely, NULL, last_t, nsamples);
-	if(!mute_i && handle->rolling)
+	if(!record_i && handle->rolling)
 		_play(handle, nsamples, capacity);
 
-	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
-	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
-
-	*handle->play_position = handle->offset * handle->window;
+	// trigger post triggers
+	if(handle->rolling)
+	{
+		if(record_i)
+			_trigger_record(handle);
+		else
+			_trigger_play(handle);
+	}
 }
 
 static void
 cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
+
+	if(handle->to_disk)
+		varchunk_free(handle->to_disk);
+	if(handle->from_disk)
+		varchunk_free(handle->from_disk);
+
+	if(handle->io)
+		gzclose(handle->io);
 
 	free(handle);
 }
@@ -429,7 +486,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 		return LV2_STATE_ERR_BAD_TYPE;
 
 	if(!path)
-		path = "dump.atom";
+		path = "seq.gz";
 
 	const char *absolute = map_path->absolute_path(map_path->handle, path);
 
@@ -454,7 +511,99 @@ _work(LV2_Handle instance,
 {
 	plughandle_t *handle = instance;
 
-	//TODO
+	const job_t *job = body;
+	switch(job->type)
+	{
+		case JOB_PLAY:
+		{
+			//printf("play\n");
+			while(!gzeof(handle->io))
+			{
+				// read event header from disk
+				LV2_Atom_Event ev1;
+				if(gzread(handle->io, &ev1, sizeof(LV2_Atom_Event)) == sizeof(LV2_Atom_Event))
+				{
+					size_t len = sizeof(LV2_Atom_Event) + ev1.body.size;
+					LV2_Atom_Event *ev2;
+					if((ev2 = varchunk_write_request(handle->from_disk, len)))
+					{
+						// clone event data
+						ev2->time.beats = ev1.time.beats;
+						ev2->body.type = ev1.body.type;
+						ev2->body.size = ev1.body.size;
+
+						// read event body from disk
+						if(gzread(handle->io, LV2_ATOM_BODY(&ev2->body), ev1.body.size) == (int)ev1.body.size)
+							varchunk_write_advance(handle->from_disk, len);
+						else
+							fprintf(stderr, "reading event body failed.\n");
+					}
+					else
+						break; // ringbuffer full
+				}
+				else
+					fprintf(stderr, "reading event header failed.\n");
+			}
+
+			break;
+		}
+		case JOB_RECORD:
+		{
+			//printf("record\n");
+			const LV2_Atom_Event *ev;
+			size_t len;
+			while((ev = varchunk_read_request(handle->to_disk, &len)))
+			{
+				if(gzwrite(handle->io, ev, len) == (int)len)
+					varchunk_read_advance(handle->to_disk);
+				else
+					fprintf(stderr, "writing event failed.\n");
+			}
+
+			break;
+		}
+		case JOB_SEEK:
+		{
+			printf("seek: %lf\n", job->beats);
+			if(handle->io && (job->beats == 0.0) ) //FIXME
+			{
+				gzseek(handle->io, 0, SEEK_SET);
+			}
+
+			break;
+		}
+		case JOB_DRAIN:
+		{
+			// inject drain marker event
+			LV2_Atom_Event *ev;
+			const size_t len = sizeof(LV2_Atom_Event);
+			if((ev = varchunk_write_request(handle->from_disk, len)))
+			{
+				ev->time.beats = 0.0;
+				ev->body.type = handle->uris.orbit_drain;
+				ev->body.size = 0;
+
+				varchunk_write_advance(handle->from_disk, len);
+			}
+			else
+				fprintf(stderr, "ringbuffer overflow\n");
+
+			break;
+		}
+		case JOB_OPEN:
+		{
+			printf("open: %s\n", handle->path);
+			if(handle->io)
+			{
+				if(handle->io)
+					gzclose(handle->io);
+				if(!(handle->io = gzopen(handle->path, "r")))
+					fprintf(stderr, "failed to open file.\n");
+			}
+
+			break;
+		}
+	}
 
 	return LV2_WORKER_SUCCESS;
 }

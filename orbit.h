@@ -32,6 +32,7 @@
 #define ORBIT_URI										"http://open-music-kontrollers.ch/lv2/orbit"
 
 #define ORBIT_PATH_URI							ORBIT_URI"#Path"
+#define ORBIT_DRAIN_URI							ORBIT_URI"#Drain"
 
 // plugin uris
 #define ORBIT_LOOPER_URI						ORBIT_URI"#looper"
