@@ -58,3 +58,11 @@ orbit:cargoship
 	lv2:microVersion @ORBIT_MICRO_VERSION@ ;
 	lv2:binary <orbit@LIB_EXT@> ;
 	rdfs:seeAlso <orbit.ttl> .
+
+# Orbit Beatbox
+orbit:beatbox
+	a lv2:Plugin ;
+	lv2:minorVersion @ORBIT_MINOR_VERSION@ ;
+	lv2:microVersion @ORBIT_MICRO_VERSION@ ;
+	lv2:binary <orbit@LIB_EXT@> ;
+	rdfs:seeAlso <orbit.ttl> .
