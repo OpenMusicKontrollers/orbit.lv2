@@ -34,6 +34,7 @@ enum _state_t {
 struct _wave_t {
 	state_t state;        // Current play state
 	bool enabled;
+	unsigned freq;
 	uint32_t wave_len;
 	uint32_t wave_offset;  // Current play offset in the wave
 	float *wave;
@@ -49,14 +50,20 @@ struct _plughandle_t {
 	const LV2_Atom_Sequence *event_in;
 	const float *bar_enabled;
 	const float *beat_enabled;
+	const float *bar_freq;
+	const float *beat_freq;
 	wave_t beat;
 	wave_t bar;
-	
+
+	double rate;
+	uint32_t attack_len;
+	uint32_t decay_len;
 	bool rolling;
 };
 
 static const float attack_s = 0.005;
 static const float decay_s  = 0.075;
+static const float amp = 0.5;
 
 static void
 _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
@@ -122,35 +129,16 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
 	// Initialise instance fields
-	const uint32_t attack_len = (uint32_t)(attack_s * rate);
-	const uint32_t decay_len = (uint32_t)(decay_s * rate);
+	handle->rate = rate;
+	handle->attack_len = (uint32_t)(attack_s * rate);
+	handle->decay_len = (uint32_t)(decay_s * rate);
 
 	// Generate one cycle of a sine wave at the desired frequency
-	const float amp = 0.5;
-
-	const float bar_freq = 440.f * 4.f;
-	handle->bar.wave_len = attack_len + decay_len;
+	handle->bar.wave_len = handle->attack_len + handle->decay_len;
 	handle->bar.wave = malloc(handle->bar.wave_len * sizeof(float));
-	for(unsigned i=0; i<handle->bar.wave_len; i++)
-	{
-		handle->bar.wave[i] = sin(i * 2.f * M_PI * bar_freq / rate) * amp;
-		if(i < attack_len)
-			handle->bar.wave[i] *= (float)i / attack_len;
-		else // >= attack_len
-			handle->bar.wave[i] *= (float)(handle->bar.wave_len - i) / decay_len;
-	}
 
-	const float beat_freq = 440.0 * 2.f;
-	handle->beat.wave_len = attack_len + decay_len;
+	handle->beat.wave_len = handle->attack_len + handle->decay_len;
 	handle->beat.wave = malloc(handle->beat.wave_len * sizeof(float));
-	for(unsigned i=0; i<handle->beat.wave_len; i++)
-	{
-		handle->beat.wave[i] = sin(i * 2.f * M_PI * beat_freq / rate) * amp;
-		if(i < attack_len)
-			handle->beat.wave[i] *= (float)i / attack_len;
-		else // >= attack_len
-			handle->beat.wave[i] *= (float)(handle->beat.wave_len - i) / decay_len;
-	}
 
 	return handle;
 }
@@ -172,6 +160,12 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->beat_enabled = (const float *)data;
 			break;
 		case 3:
+			handle->bar_freq= (const float *)data;
+			break;
+		case 4:
+			handle->beat_freq = (const float *)data;
+			break;
+		case 5:
 			handle->bar.audio = (float *)data;
 			handle->beat.audio = (float *)data;
 			break;
@@ -228,6 +222,36 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	handle->bar.enabled = *handle->bar_enabled != 0.f;
 	handle->beat.enabled = *handle->beat_enabled != 0.f;
+
+	unsigned bar_freq = floor(*handle->bar_freq);
+	if(bar_freq != handle->bar.freq)
+	{
+		for(unsigned i=0; i<handle->bar.wave_len; i++)
+		{
+			handle->bar.wave[i] = sin(i * 2.f * M_PI * bar_freq / handle->rate) * amp;
+			if(i < handle->attack_len)
+				handle->bar.wave[i] *= (float)i / handle->attack_len;
+			else // >= handle->attack_len
+				handle->bar.wave[i] *= (float)(handle->bar.wave_len - i) / handle->decay_len;
+		}
+
+		handle->bar.freq = bar_freq;
+	}
+
+	unsigned beat_freq = floor(*handle->beat_freq);
+	if(beat_freq != handle->beat.freq)
+	{
+		for(unsigned i=0; i<handle->beat.wave_len; i++)
+		{
+			handle->beat.wave[i] = sin(i * 2.f * M_PI * beat_freq / handle->rate) * amp;
+			if(i < handle->attack_len)
+				handle->beat.wave[i] *= (float)i / handle->attack_len;
+			else // >= attack_len
+				handle->beat.wave[i] *= (float)(handle->beat.wave_len - i) / handle->decay_len;
+		}
+
+		handle->beat.freq = beat_freq;
+	}
 
 	// clear audio output buffer
 	memset(handle->bar.audio, 0x0, sizeof(float)*nsamples);
