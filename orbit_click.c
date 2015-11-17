@@ -33,6 +33,7 @@ enum _state_t {
 
 struct _wave_t {
 	state_t state;        // Current play state
+	bool enabled;
 	uint32_t wave_len;
 	uint32_t wave_offset;  // Current play offset in the wave
 	float *wave;
@@ -46,7 +47,8 @@ struct _plughandle_t {
 	timely_t timely;
 
 	const LV2_Atom_Sequence *event_in;
-
+	const float *bar_enabled;
+	const float *beat_enabled;
 	wave_t beat;
 	wave_t bar;
 	
@@ -71,16 +73,24 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		double fract = modf(TIMELY_BAR_BEAT(timely), &integ);
 		if(handle->rolling && (fract == 0.0) )
 		{
-			handle->beat.state = STATE_ON;
-			handle->beat.wave_offset = 0;
+			bool is_bar_start = fmod(TIMELY_BAR_BEAT(timely), TIMELY_BEATS_PER_BAR(timely)) == 0.f;
+
+			if(handle->beat.enabled && (handle->bar.enabled ? !is_bar_start : true))
+			{
+				handle->beat.state = STATE_ON;
+				handle->beat.wave_offset = 0;
+			}
 		}
 	}
 	else if(type == TIMELY_URI_BAR(timely))
 	{
 		if(handle->rolling)
 		{
-			handle->bar.state = STATE_ON;
-			handle->bar.wave_offset = 0;
+			if(handle->bar.enabled)
+			{
+				handle->bar.state = STATE_ON;
+				handle->bar.wave_offset = 0;
+			}
 		}
 	}
 }
@@ -156,9 +166,13 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->event_in = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->bar.audio = (float *)data;
+			handle->bar_enabled= (const float *)data;
 			break;
 		case 2:
+			handle->beat_enabled = (const float *)data;
+			break;
+		case 3:
+			handle->bar.audio = (float *)data;
 			handle->beat.audio = (float *)data;
 			break;
 		default:
@@ -188,7 +202,7 @@ _play(plughandle_t *handle, wave_t *wave, uint32_t begin, uint32_t end)
 			{
 				if(wave->wave_offset++ < wave->wave_len)
 				{
-					output[i] = wave->wave[wave->wave_offset];
+					output[i] += wave->wave[wave->wave_offset];
 					break;
 				}
 				else
@@ -199,7 +213,7 @@ _play(plughandle_t *handle, wave_t *wave, uint32_t begin, uint32_t end)
 			}
 			case STATE_OFF:
 			{
-				output[i] = 0.f;
+				//output[i] += 0.f;
 				break;
 			}
 		}
@@ -211,6 +225,12 @@ run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
 	uint32_t last_t = 0;
+
+	handle->bar.enabled = *handle->bar_enabled != 0.f;
+	handle->beat.enabled = *handle->beat_enabled != 0.f;
+
+	// clear audio output buffer
+	memset(handle->bar.audio, 0x0, sizeof(float)*nsamples);
 
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{

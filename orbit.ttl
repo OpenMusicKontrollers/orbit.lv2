@@ -167,18 +167,32 @@ orbit:click
 		lv2:name "Event Input" ;
 		lv2:designation lv2:control ;
 	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 1 ;
+		lv2:symbol "bar_enabled" ;
+		lv2:name "Bar enabled" ;
+		lv2:default 1 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		lv2:portProperty lv2:toggled ;
+	] , [
+	  a lv2:InputPort ,
+			lv2:ControlPort ;
+		lv2:index 2 ;
+		lv2:symbol "beat_enabled" ;
+		lv2:name "Beat enabled" ;
+		lv2:default 1 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		lv2:portProperty lv2:toggled ;
+	] , [
 		# source audio port
 	  a lv2:OutputPort ,
 			lv2:AudioPort ;
-		lv2:index 1 ;
-		lv2:symbol "audio_bar" ;
-		lv2:name "Audio Bar" ;
-	] , [
-	  a lv2:OutputPort ,
-			lv2:AudioPort ;
-		lv2:index 2 ;
-		lv2:symbol "audio_beat" ;
-		lv2:name "Audio Beat" ;
+		lv2:index 3 ;
+		lv2:symbol "audio_out" ;
+		lv2:name "Audio Output" ;
 	] .
 
 # Pacemaker Plugin
