@@ -527,7 +527,7 @@ orbit:beatbox
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
-		atom:support midi:MidiEvent;
+		atom:supports midi:MidiEvent;
 		lv2:index 7 ;
 		lv2:symbol "midi_out" ;
 		lv2:name "MIDI Output" ;
