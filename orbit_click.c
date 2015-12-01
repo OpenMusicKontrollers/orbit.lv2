@@ -76,9 +76,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 	}
 	else if(type == TIMELY_URI_BAR_BEAT(timely))
 	{
-		double integ;
-		double fract = modf(TIMELY_BAR_BEAT(timely), &integ);
-		if(handle->rolling && (fract == 0.0) )
+		if(handle->rolling)
 		{
 			bool is_bar_start = fmod(TIMELY_BAR_BEAT(timely), TIMELY_BEATS_PER_BAR(timely)) == 0.f;
 
@@ -124,7 +122,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	timely_mask_t mask = TIMELY_MASK_BAR_BEAT | TIMELY_MASK_BAR | TIMELY_MASK_SPEED;
+	timely_mask_t mask = TIMELY_MASK_BAR_BEAT_WHOLE
+		| TIMELY_MASK_BAR_WHOLE
+		| TIMELY_MASK_SPEED;
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 

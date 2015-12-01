@@ -49,6 +49,8 @@ struct _plughandle_t {
 	uint8_t beat_note_i;
 	uint8_t bar_channel_i;
 	uint8_t beat_channel_i;
+	bool bar_on;
+	bool beat_on;
 	
 	bool rolling;
 	LV2_Atom_Forge_Ref ref;
@@ -96,32 +98,53 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 
 		if(!handle->rolling)
 		{
-			_note_off(handle, frames, handle->bar_channel_i, handle->bar_note_i);
-			_note_off(handle, frames, handle->beat_channel_i, handle->beat_note_i);
+			if(handle->bar_on)
+			{
+				_note_off(handle, frames, handle->bar_channel_i, handle->bar_note_i);
+				handle->bar_on = false;
+			}
+
+			if(handle->beat_on)
+			{
+				_note_off(handle, frames, handle->beat_channel_i, handle->beat_note_i);
+				handle->beat_on = false;
+			}
 		}
 	}
 	else if(type == TIMELY_URI_BAR_BEAT(timely))
 	{
-		double integ;
-		double fract = modf(TIMELY_BAR_BEAT(timely), &integ);
-		if(handle->rolling && (fract == 0.0) )
+		if(handle->rolling)
 		{
 			bool is_bar_start = fmod(TIMELY_BAR_BEAT(timely), TIMELY_BEATS_PER_BAR(timely)) == 0.f;
 
-			_note_off(handle, frames, handle->beat_channel_i, handle->beat_note_i);
+			if(handle->beat_on)
+			{
+				_note_off(handle, frames, handle->beat_channel_i, handle->beat_note_i);
+				handle->beat_on = false;
+			}
 
 			if(handle->beat_enabled_b && (handle->bar_enabled_b ? !is_bar_start : true))
+			{
 				_note_on(handle, frames, handle->beat_channel_i, handle->beat_note_i);
+				handle->beat_on = true;
+			}
 		}
 	}
 	else if(type == TIMELY_URI_BAR(timely))
 	{
 		if(handle->rolling)
 		{
-			_note_off(handle, frames, handle->bar_channel_i, handle->bar_note_i);
+			if(handle->bar_on)
+			{
+				_note_off(handle, frames, handle->bar_channel_i, handle->bar_note_i);
+				handle->bar_on = false;
+			}
 
 			if(handle->bar_enabled_b)
+			{
 				_note_on(handle, frames, handle->bar_channel_i, handle->bar_note_i);
+				handle->bar_on = true;
+			}
 		}
 	}
 }
@@ -150,7 +173,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	handle->urid.midi_event = handle->map->map(handle->map->handle, LV2_MIDI__MidiEvent);
 
-	timely_mask_t mask = TIMELY_MASK_BAR_BEAT | TIMELY_MASK_BAR | TIMELY_MASK_SPEED;
+	timely_mask_t mask = TIMELY_MASK_BAR_BEAT_WHOLE
+		| TIMELY_MASK_BAR_WHOLE
+		| TIMELY_MASK_SPEED;
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 

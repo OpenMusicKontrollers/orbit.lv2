@@ -291,7 +291,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		| TIMELY_MASK_BEATS_PER_BAR
 		| TIMELY_MASK_BEATS_PER_MINUTE
 		| TIMELY_MASK_FRAMES_PER_SECOND
-		| TIMELY_MASK_SPEED;
+		| TIMELY_MASK_SPEED
+		| TIMELY_MASK_BAR_BEAT_WHOLE;
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
