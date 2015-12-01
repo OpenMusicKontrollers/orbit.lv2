@@ -44,11 +44,13 @@ struct _plughandle_t {
 	const float *punch;
 	const float *width;
 	const float *mute;
+	const float *switsch;
 	float *play_capacity;
 	float *rec_capacity;
 	float *play_position;
 
 	punchmode_t punch_i;
+	bool switsch_b;
 	unsigned count_i;
 	unsigned width_i;
 	float window;
@@ -174,7 +176,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 			handle->offset = fmod(beats, handle->width_i * TIMELY_BEATS_PER_BAR(timely))
 				* TIMELY_FRAMES_PER_BEAT(timely);
 
-		if(handle->offset == 0)
+		if(handle->switsch_b && (handle->offset == 0) )
 			handle->play ^= 1;
 
 		_reposition_rec(handle);
@@ -243,12 +245,15 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->mute = (const float *)data;
 			break;
 		case 5:
-			handle->play_capacity = (float *)data;
+			handle->switsch = (const float *)data;
 			break;
 		case 6:
-			handle->rec_capacity = (float *)data;
+			handle->play_capacity = (float *)data;
 			break;
 		case 7:
+			handle->rec_capacity = (float *)data;
+			break;
+		case 8:
 			handle->play_position = (float *)data;
 			break;
 		default:
@@ -297,6 +302,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		_window_refresh(handle);
 
 	bool mute_i = floor(*handle->mute);
+	handle->switsch_b = floor(*handle->switsch);
 
 	lv2_atom_sequence_clear(handle->event_out);
 
