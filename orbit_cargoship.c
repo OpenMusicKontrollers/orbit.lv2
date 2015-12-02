@@ -175,7 +175,7 @@ _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 			capacity, src);
 		if(dst)
 		{
-			dst->time.frames = (src->time.beats - handle->beats_period) * TIMELY_FRAMES_PER_BEAT(&handle->timely);
+			dst->time.frames = round((src->time.beats - handle->beats_period) * TIMELY_FRAMES_PER_BEAT(&handle->timely));
 
 			if(dst->time.frames < 0)
 			{
