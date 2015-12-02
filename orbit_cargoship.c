@@ -33,7 +33,7 @@ typedef struct _plughandle_t plughandle_t;
 enum _jobtype_t {
 	JOB_PLAY				= 0,
 	JOB_RECORD			= 1,
-	JOB_SEEK 				= 2,
+	JOB_SEEK				= 2,
 	JOB_OPEN_PLAY		= 3,
 	JOB_OPEN_RECORD	= 4,
 	JOB_DRAIN				= 5
@@ -54,7 +54,7 @@ struct _plughandle_t {
 		LV2_URID orbit_path;
 		LV2_URID orbit_drain;
 	} uris;
-	
+
 	timely_t timely;
 	LV2_Worker_Schedule *sched;
 	bool restored; //TODO use properly
@@ -258,7 +258,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
-	
+
 	const LV2_State_Make_Path *make_path = NULL;
 
 	for(unsigned i=0; features[i]; i++)
@@ -404,6 +404,18 @@ run(LV2_Handle instance, uint32_t nsamples)
 			_trigger_record(handle);
 		else
 			_trigger_play(handle);
+	}
+}
+
+static void
+deactivate(LV2_Handle instance)
+{
+	plughandle_t *handle = instance;
+
+	if(handle->io)
+	{
+		fclose(handle->io);
+		handle->io = NULL;
 	}
 }
 
@@ -719,7 +731,7 @@ const LV2_Descriptor orbit_cargoship = {
 	.connect_port		= connect_port,
 	.activate				= activate,
 	.run						= run,
-	.deactivate			= NULL,
+	.deactivate			= deactivate,
 	.cleanup				= cleanup,
 	.extension_data	= extension_data
 };
