@@ -179,6 +179,15 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		if(handle->switsch_b && (handle->offset == 0) )
 			handle->play ^= 1;
 
+		if(beats == 0.0) // clear sequence buffers when transport is rewound
+		{
+			LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
+			LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
+
+			lv2_atom_sequence_clear(play_seq);
+			lv2_atom_sequence_clear(rec_seq);
+		}
+
 		_reposition_rec(handle);
 		_reposition_play(handle);
 	}
