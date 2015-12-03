@@ -224,16 +224,16 @@ run(LV2_Handle instance, uint32_t nsamples)
 	bool rolling_i = floor(*handle->rolling);
 	bool rewind_i = floor(*handle->rewind);
 
-	int needs_update = 0;
+	bool needs_update = false;
 
 	if(beat_unit_i != handle->beat_unit_i)
-		needs_update = 1;
+		needs_update = true;
 	if(beats_per_bar_i != handle->beats_per_bar_i)
-		needs_update = 1;
+		needs_update = true;
 	if(beats_per_minute_i != handle->beats_per_minute_i)
-		needs_update = 1;
+		needs_update = true;
 	if(rolling_i != handle->rolling_i)
-		needs_update = 1;
+		needs_update = true;
 
 	if(needs_update)
 	{
@@ -245,7 +245,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		pos->beats_per_minute = beats_per_minute_i;
 		pos->speed = rolling_i ? 1.f : 0.f;
 
-		if(rolling_i && !handle->rolling_i && rewind_i) // start rolling
+		if( (rolling_i != handle->rolling_i) && rewind_i) // start/stop rolling
 		{
 			pos->frame = 0; // reset frame pointer
 			pos->bar = 0; // reset bar
