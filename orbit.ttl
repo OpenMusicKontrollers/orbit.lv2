@@ -27,10 +27,16 @@
 @prefix work:			<http://lv2plug.in/ns/ext/worker#> .
 @prefix state:		<http://lv2plug.in/ns/ext/state#> .
 
+@prefix osc:  <http://open-music-kontrollers.ch/lv2/osc#> .
 @prefix lic:			<http://opensource.org/licenses/> .
 @prefix omk:			<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:			<http://open-music-kontrollers.ch/lv2/> .
 @prefix orbit:		<http://open-music-kontrollers.ch/lv2/orbit#> .
+
+osc:Event
+	a rdfs:Class ;
+	rdfs:subClassOf atom:Object ;
+	rdfs:label "OSC Event (Bundle or Message)" .
 
 # Maintainer
 omk:me
@@ -63,6 +69,7 @@ orbit:looper
 		atom:supports midi:MidiEvent ;
 		atom:supports time:Position ;
 		atom:supports atom:Object ;
+		atom:supports osc:Event ;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event Input" ;
@@ -73,8 +80,8 @@ orbit:looper
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
-		atom:supports time:Position ;
 		atom:supports atom:Object ;
+		atom:supports osc:Event ;
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Output" ;
@@ -325,6 +332,7 @@ orbit:tapdancer
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports atom:Object ;
+		atom:supports osc:Event ;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event Input" ;
@@ -410,6 +418,7 @@ orbit:cargoship
 		atom:supports midi:MidiEvent ;
 		atom:supports time:Position ;
 		atom:supports atom:Object ;
+		atom:supports osc:Event ;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event Input" ;
@@ -422,6 +431,7 @@ orbit:cargoship
 		atom:supports midi:MidiEvent ;
 		atom:supports time:Position ;
 		atom:supports atom:Object ;
+		atom:supports osc:Event ;
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Output" ;
