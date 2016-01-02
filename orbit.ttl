@@ -149,7 +149,7 @@ orbit:looper
 		orbit:looper_punch 1 ;
 		orbit:looper_width 4 ;
 		orbit:looper_mute false ;
-		orbit:looper_switch true ;
+		orbit:looper_switch false ;
 	] .
 
 # Click Plugin
