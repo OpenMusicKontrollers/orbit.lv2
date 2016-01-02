@@ -21,6 +21,9 @@
 
 #include <orbit.h>
 #include <timely.h>
+#include <props.h>
+
+#define MAX_NPROPS 7
 
 #define BUF_SIZE 0x1000000 // 16 MB
 #define BUF_PERCENT (100.f / (BUF_SIZE - sizeof(LV2_Atom)))
@@ -36,25 +39,32 @@ enum _punchmode_t {
 struct _plughandle_t {
 	LV2_URID_Map *map;
 	LV2_Atom_Forge forge;
+	LV2_Atom_Forge_Ref ref;
+
+	struct {
+		LV2_URID play_capacity;
+		LV2_URID rec_capacity;
+		LV2_URID position;
+	} urid;
 	
 	timely_t timely;
 
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
-	const float *punch;
-	const float *width;
-	const float *mute;
-	const float *switsch;
-	float *play_capacity;
-	float *rec_capacity;
-	float *play_position;
 
-	punchmode_t punch_i;
-	bool switsch_b;
-	unsigned count_i;
-	unsigned width_i;
+	int32_t punch;
+	int32_t width;
+	int32_t mute;
+	int32_t switsch;
+
+	float play_capacity;
+	float rec_capacity;
+	float position;
+
 	float window;
 	int64_t offset;
+
+	PROPS_T(props, MAX_NPROPS);
 
 	unsigned play;
 	bool rolling;
@@ -62,12 +72,61 @@ struct _plughandle_t {
 	LV2_Atom_Event *ev;
 };
 
+static const props_def_t stat_punch = {
+	.property = ORBIT_URI"#looper_punch",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_width = {
+	.property = ORBIT_URI"#looper_width",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_mute = {
+	.property = ORBIT_URI"#looper_mute",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_switch = {
+	.property = ORBIT_URI"#looper_switch",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_play_capacity = {
+	.property = ORBIT_URI"#looper_play_capacity",
+	.access = LV2_PATCH__readable,
+	.type = LV2_ATOM__Float,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_rec_capacity = {
+	.property = ORBIT_URI"#looper_rec_capacity",
+	.access = LV2_PATCH__readable,
+	.type = LV2_ATOM__Float,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_position = {
+	.property = ORBIT_URI"#looper_position",
+	.access = LV2_PATCH__readable,
+	.type = LV2_ATOM__Float,
+	.mode = PROP_MODE_STATIC
+};
+
 static inline void
 _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 {
 	const LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
 
-	const int64_t ref = handle->offset - to; // beginning of current period
+	const int64_t rel = handle->offset - to; // beginning of current period
 
 	while(handle->ev && !lv2_atom_sequence_is_end(&play_seq->body, play_seq->atom.size, handle->ev))
 	{
@@ -76,16 +135,14 @@ _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 		if(beat_frames >= handle->offset)
 			break; // event not part of this region
 
-		LV2_Atom_Event *e = lv2_atom_sequence_append_event(handle->event_out,
-			capacity, handle->ev);
-		if(e)
-		{
-			e->time.frames = beat_frames - ref;
-		}
-		else
-		{
-			break; // overflow
-		}
+		// append event
+		const LV2_Atom *atom = &handle->ev->body;
+		if(handle->ref)
+			handle->ref = lv2_atom_forge_frame_time(&handle->forge, beat_frames - rel);
+		if(handle->ref)
+			handle->ref = lv2_atom_forge_raw(&handle->forge, atom, lv2_atom_total_size(atom));
+		if(handle->ref)
+			lv2_atom_forge_pad(&handle->forge, atom->size);
 
 		handle->ev = lv2_atom_sequence_next(handle->ev);
 	}
@@ -150,10 +207,10 @@ _window_refresh(plughandle_t *handle)
 {
 	timely_t *timely = &handle->timely;
 
-	if(handle->punch_i == PUNCH_BEAT)
-		handle->window = 100.f / (handle->width_i * TIMELY_FRAMES_PER_BEAT(timely));
-	else if(handle->punch_i == PUNCH_BAR)
-		handle->window = 100.f / (handle->width_i * TIMELY_FRAMES_PER_BAR(timely));
+	if(handle->punch == PUNCH_BEAT)
+		handle->window = 100.f / (handle->width * TIMELY_FRAMES_PER_BEAT(timely));
+	else if(handle->punch == PUNCH_BAR)
+		handle->window = 100.f / (handle->width * TIMELY_FRAMES_PER_BAR(timely));
 }
 
 static void
@@ -170,13 +227,13 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		double beats = (double)TIMELY_BAR(timely) * TIMELY_BEATS_PER_BAR(timely)
 			+ TIMELY_BAR_BEAT(timely);
 
-		if(handle->punch_i == PUNCH_BEAT)
-			handle->offset = fmod(beats, handle->width_i) * TIMELY_FRAMES_PER_BEAT(timely);
-		else if(handle->punch_i == PUNCH_BAR)
-			handle->offset = fmod(beats, handle->width_i * TIMELY_BEATS_PER_BAR(timely))
+		if(handle->punch == PUNCH_BEAT)
+			handle->offset = fmod(beats, handle->width) * TIMELY_FRAMES_PER_BEAT(timely);
+		else if(handle->punch == PUNCH_BAR)
+			handle->offset = fmod(beats, handle->width * TIMELY_BEATS_PER_BAR(timely))
 				* TIMELY_FRAMES_PER_BEAT(timely);
 
-		if(handle->switsch_b && (handle->offset == 0) )
+		if(handle->switsch && (handle->offset == 0) )
 			handle->play ^= 1;
 
 		if(beats == 0.0) // clear sequence buffers when transport is rewound
@@ -191,6 +248,15 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		_reposition_rec(handle);
 		_reposition_play(handle);
 	}
+
+	_window_refresh(handle);
+}
+
+static void
+_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
 
 	_window_refresh(handle);
 }
@@ -228,6 +294,31 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
+	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
+	{
+		fprintf(stderr, "failed to initialize property structure\n");
+		free(handle);
+		return NULL;
+	}
+
+	if(  props_register(&handle->props, &stat_punch, PROP_EVENT_WRITE, _intercept, &handle->punch)
+		&& props_register(&handle->props, &stat_width, PROP_EVENT_WRITE, _intercept, &handle->width)
+		&& props_register(&handle->props, &stat_mute, PROP_EVENT_NONE, NULL, &handle->mute)
+		&& props_register(&handle->props, &stat_switch, PROP_EVENT_NONE, NULL, &handle->switsch)
+
+		&& (handle->urid.play_capacity = props_register(&handle->props, &stat_play_capacity, PROP_EVENT_NONE, NULL, &handle->play_capacity))
+		&& (handle->urid.rec_capacity = props_register(&handle->props, &stat_rec_capacity, PROP_EVENT_NONE, NULL, &handle->rec_capacity))
+		&& (handle->urid.position = props_register(&handle->props, &stat_position, PROP_EVENT_NONE, NULL, &handle->position)) )
+	{
+		props_sort(&handle->props);
+	}
+	else
+	{
+		fprintf(stderr, "failed to register properties\n");
+		free(handle);
+		return NULL;
+	}
+
 	return handle;
 }
 
@@ -243,27 +334,6 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			break;
 		case 1:
 			handle->event_out = (LV2_Atom_Sequence *)data;
-			break;
-		case 2:
-			handle->punch = (const float *)data;
-			break;
-		case 3:
-			handle->width = (const float *)data;
-			break;
-		case 4:
-			handle->mute = (const float *)data;
-			break;
-		case 5:
-			handle->switsch = (const float *)data;
-			break;
-		case 6:
-			handle->play_capacity = (float *)data;
-			break;
-		case 7:
-			handle->rec_capacity = (float *)data;
-			break;
-		case 8:
-			handle->play_position = (float *)data;
 			break;
 		default:
 			break;
@@ -297,23 +367,11 @@ static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
-	uint32_t capacity = handle->event_out->atom.size;
 
-	punchmode_t punch_i = floor(*handle->punch);
-	bool punch_has_changed = punch_i != handle->punch_i;
-	handle->punch_i = punch_i;
-
-	int64_t width_i = floor(*handle->width);
-	bool width_has_changed = width_i != handle->width_i;
-	handle->width_i = width_i;
-
-	if(punch_has_changed || width_has_changed)
-		_window_refresh(handle);
-
-	bool mute_i = floor(*handle->mute);
-	handle->switsch_b = floor(*handle->switsch);
-
-	lv2_atom_sequence_clear(handle->event_out);
+	const uint32_t capacity = handle->event_out->atom.size;
+	LV2_Atom_Forge_Frame frame;
+	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
+	handle->ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
 
 	int64_t last_t = 0;
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
@@ -322,12 +380,14 @@ run(LV2_Handle instance, uint32_t nsamples)
 			handle->offset += ev->time.frames - last_t;
 
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
-		const int time_event = timely_advance(&handle->timely, obj, last_t, ev->time.frames);
+		int handled = timely_advance(&handle->timely, obj, last_t, ev->time.frames);
+		if(!handled)
+			handled = props_advance(&handle->props, &handle->forge, ev->time.frames, obj, &handle->ref);
 
-		if(!time_event && handle->rolling)
-			_rec(handle, ev); // dont' record time position signals
+		if(!handled && handle->rolling)
+			_rec(handle, ev); // dont' record time position signals and patch messages
 	
-		if(!mute_i && handle->rolling)
+		if(!handle->mute && handle->rolling)
 			_play(handle, ev->time.frames, capacity);
 
 		last_t = ev->time.frames;
@@ -336,15 +396,36 @@ run(LV2_Handle instance, uint32_t nsamples)
 	if(handle->rolling)
 		handle->offset += nsamples - last_t;
 	timely_advance(&handle->timely, NULL, last_t, nsamples);
-	if(!mute_i && handle->rolling)
+	if(!handle->mute && handle->rolling)
 		_play(handle, nsamples, capacity);
 
 	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
 	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
 
-	*handle->play_capacity = BUF_PERCENT * play_seq->atom.size;
-	*handle->rec_capacity = BUF_PERCENT * rec_seq->atom.size;
-	*handle->play_position = handle->offset * handle->window;
+	const float play_capacity = BUF_PERCENT * play_seq->atom.size;
+	const float rec_capacity = BUF_PERCENT * rec_seq->atom.size;
+	const float position = handle->offset * handle->window;
+
+	if(handle->ref && (fabsf(play_capacity - handle->play_capacity) > 0.1) ) //FIXME
+	{
+		handle->play_capacity = play_capacity;
+		handle->ref = props_set(&handle->props, &handle->forge, nsamples-1, handle->urid.play_capacity);
+	}
+	if(handle->ref && (fabsf(rec_capacity - handle->rec_capacity) > 0.1) ) //FIXME
+	{
+		handle->rec_capacity = rec_capacity;
+		handle->ref = props_set(&handle->props, &handle->forge, nsamples-1, handle->urid.rec_capacity);
+	}
+	if(handle->ref && (fabsf(position - handle->position) > 0.1) ) //FIXME
+	{
+		handle->position = position;
+		handle->ref = props_set(&handle->props, &handle->forge, nsamples-1, handle->urid.position);
+	}
+
+	if(handle->ref)
+		lv2_atom_forge_pop(&handle->forge, &frame);
+	else
+		lv2_atom_sequence_clear(handle->event_out);
 }
 
 static void
@@ -355,6 +436,39 @@ cleanup(LV2_Handle instance)
 	free(handle);
 }
 
+static LV2_State_Status
+_state_save(LV2_Handle instance, LV2_State_Store_Function store,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+}
+
+static LV2_State_Status
+_state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+}
+
+static const LV2_State_Interface state_iface = {
+	.save = _state_save,
+	.restore = _state_restore
+};
+
+static const void *
+extension_data(const char *uri)
+{
+	if(!strcmp(uri, LV2_STATE__interface))
+		return &state_iface;
+	return NULL;
+}
+
 const LV2_Descriptor orbit_looper = {
 	.URI						= ORBIT_LOOPER_URI,
 	.instantiate		= instantiate,
@@ -363,5 +477,5 @@ const LV2_Descriptor orbit_looper = {
 	.run						= run,
 	.deactivate			= NULL,
 	.cleanup				= cleanup,
-	.extension_data	= NULL
+	.extension_data	= extension_data
 };

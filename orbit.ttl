@@ -53,14 +53,60 @@ proj:orbit
 	doap:name "Orbit Bundle" .
 
 # Looper Plugin
+orbit:looper_punch
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Punch Mode" ;
+	lv2:minimum 0 ;
+	lv2:maximum 1 ;
+	lv2:scalePoint [ rdfs:label "Beat" ;	rdf:value 0 ] ;
+	lv2:scalePoint [ rdfs:label "Bar" ;		rdf:value 1 ] .
+orbit:looper_width
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Width" ;
+	lv2:minimum 1 ;
+	lv2:maximum 128 .
+orbit:looper_mute
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Mute" .
+orbit:looper_switch
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Switch" .
+
+orbit:looper_play_capacity
+	a lv2:Parameter ;
+	rdfs:range atom:Float ;
+	rdfs:label "Playback Capacity" ;
+	units:unit units:pc ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 100.0 .
+orbit:looper_rec_capacity
+	a lv2:Parameter ;
+	rdfs:range atom:Float ;
+	rdfs:label "Recording Capacity" ;
+	units:unit units:pc ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 100.0 .
+orbit:looper_position
+	a lv2:Parameter ;
+	rdfs:range atom:Float ;
+	rdfs:label "Position" ;
+	units:unit units:pc ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 100.0 .
+
 orbit:looper
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Looper" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+	lv2:extensionData	state:interface ;
 
 	lv2:port [
 		# sink event port
@@ -69,8 +115,8 @@ orbit:looper
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
 		atom:supports time:Position ;
-		atom:supports atom:Object ;
 		atom:supports osc:Event ;
+		atom:supports patch:Message ;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event Input" ;
@@ -81,87 +127,29 @@ orbit:looper
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent ;
-		atom:supports atom:Object ;
 		atom:supports osc:Event ;
+		atom:supports patch:Message ;
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Output" ;
 		lv2:designation lv2:control ;
-	] , [
-		# control input ports
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 2 ;
-		lv2:symbol "punch_mode" ;
-		lv2:name "Punch Mode" ;
-		lv2:default 1.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 1.0 ;
-		lv2:portProperty lv2:integer;
-		lv2:portProperty lv2:enumeration;
-		lv2:scalePoint [ rdfs:label "Beat" ;					rdf:value 0 ] ;
-		lv2:scalePoint [ rdfs:label "Bar" ;						rdf:value 1 ] ;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 3 ;
-		lv2:symbol "width" ;
-		lv2:name "Width" ;
-		lv2:default 4.0 ;
-		lv2:minimum 1.0 ;
-		lv2:maximum 128 ;
-		lv2:portProperty lv2:integer;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 4 ;
-		lv2:symbol "mute" ;
-		lv2:name "Mute" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
-		lv2:portProperty lv2:toggled;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 5 ;
-		lv2:symbol "switch" ;
-		lv2:name "Switch" ;
-		lv2:default 1 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
-		lv2:portProperty lv2:toggled;
-	] , [
-		# control output ports
-	  a lv2:OutputPort ,
-			lv2:ControlPort ;
-		lv2:index 6 ;
-		lv2:symbol "play_capacity" ;
-		lv2:name "Playback Capacity" ;
-		lv2:default 0.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 100.0 ;
-		units:unit units:pc ;
-	] , [
-	  a lv2:OutputPort ,
-			lv2:ControlPort ;
-		lv2:index 7 ;
-		lv2:symbol "rec_capacity" ;
-		lv2:name "Recording Capacity" ;
-		lv2:default 0.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 100.0 ;
-		units:unit units:pc ;
-	] , [
-	  a lv2:OutputPort ,
-			lv2:ControlPort ;
-		lv2:index 8 ;
-		lv2:symbol "play_position" ;
-		lv2:name "Playback Position" ;
-		lv2:default 0.0 ;
-		lv2:minimum 0.0 ;
-		lv2:maximum 100.0 ;
-		units:unit units:pc ;
+	] ;
+
+	patch:writable
+		orbit:looper_punch ,
+		orbit:looper_width ,
+		orbit:looper_mute ,
+		orbit:looper_switch ;
+	patch:readable
+		orbit:looper_play_capacity ,
+		orbit:looper_rec_capacity ,
+		orbit:looper_position ;
+
+	state:state [
+		orbit:looper_punch 1 ;
+		orbit:looper_width 4 ;
+		orbit:looper_mute false ;
+		orbit:looper_switch true ;
 	] .
 
 # Click Plugin
