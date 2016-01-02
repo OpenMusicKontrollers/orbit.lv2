@@ -21,6 +21,9 @@
 
 #include <orbit.h>
 #include <timely.h>
+#include <props.h>
+
+#define MAX_NPROPS 4
 
 typedef enum _state_t state_t;
 typedef struct _wave_t wave_t;
@@ -33,7 +36,7 @@ enum _state_t {
 
 struct _wave_t {
 	state_t state;        // Current play state
-	bool enabled;
+	int32_t enabled;
 	unsigned freq;
 	uint32_t wave_len;
 	uint32_t wave_offset;  // Current play offset in the wave
@@ -48,12 +51,15 @@ struct _plughandle_t {
 	timely_t timely;
 
 	const LV2_Atom_Sequence *event_in;
-	const float *bar_enabled;
-	const float *beat_enabled;
-	const float *bar_freq;
-	const float *beat_freq;
+	LV2_Atom_Sequence *event_out;
+
+	int32_t bar_note;
+	int32_t beat_note;
+
 	wave_t beat;
 	wave_t bar;
+
+	PROPS_T(props, MAX_NPROPS);
 
 	double rate;
 	uint32_t attack_len;
@@ -64,6 +70,40 @@ struct _plughandle_t {
 static const float attack_s = 0.005;
 static const float decay_s  = 0.075;
 static const float amp = 0.5;
+
+static const props_def_t stat_bar_enabled = {
+	.property = ORBIT_URI"#click_bar_enabled",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_beat_enabled = {
+	.property = ORBIT_URI"#click_beat_enabled",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_bar_note = {
+	.property = ORBIT_URI"#click_bar_note",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_beat_note = {
+	.property = ORBIT_URI"#click_beat_note",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static inline float
+_midi2cps(float pitch)
+{
+	return exp2f( (pitch - 69.f) / 12.f) * 440.f;
+}
 
 static void
 _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
@@ -100,6 +140,43 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 	}
 }
 
+static void
+_bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	handle->bar.freq = _midi2cps(handle->bar_note);
+
+	for(unsigned i=0; i<handle->bar.wave_len; i++)
+	{
+		handle->bar.wave[i] = sin(i * 2.f * M_PI * handle->bar.freq / handle->rate) * amp;
+		if(i < handle->attack_len)
+			handle->bar.wave[i] *= (float)i / handle->attack_len;
+		else // >= handle->attack_len
+			handle->bar.wave[i] *= (float)(handle->bar.wave_len - i) / handle->decay_len;
+	}
+}
+
+static void
+_beat_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	handle->beat.freq = _midi2cps(handle->beat_note);
+
+	for(unsigned i=0; i<handle->beat.wave_len; i++)
+	{
+		handle->beat.wave[i] = sin(i * 2.f * M_PI * handle->beat.freq / handle->rate) * amp;
+		if(i < handle->attack_len)
+			handle->beat.wave[i] *= (float)i / handle->attack_len;
+		else // >= attack_len
+			handle->beat.wave[i] *= (float)(handle->beat.wave_len - i) / handle->decay_len;
+	}
+}
+
+
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
@@ -128,6 +205,27 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
+	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
+	{
+		fprintf(stderr, "failed to initialize property structure\n");
+		free(handle);
+		return NULL;
+	}
+
+	if(  props_register(&handle->props, &stat_bar_enabled, PROP_EVENT_NONE, NULL, &handle->bar.enabled)
+		&& props_register(&handle->props, &stat_beat_enabled, PROP_EVENT_NONE, NULL, &handle->beat.enabled)
+		&& props_register(&handle->props, &stat_bar_note, PROP_EVENT_WRITE, _bar_intercept, &handle->bar_note)
+		&& props_register(&handle->props, &stat_beat_note, PROP_EVENT_WRITE, _beat_intercept, &handle->beat_note) )
+	{
+		props_sort(&handle->props);
+	}
+	else
+	{
+		fprintf(stderr, "failed to register properties\n");
+		free(handle);
+		return NULL;
+	}
+
 	// Initialise instance fields
 	handle->rate = rate;
 	handle->attack_len = (uint32_t)(attack_s * rate);
@@ -154,18 +252,9 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->event_in = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->bar_enabled= (const float *)data;
+			handle->event_out = (LV2_Atom_Sequence *)data;
 			break;
 		case 2:
-			handle->beat_enabled = (const float *)data;
-			break;
-		case 3:
-			handle->bar_freq= (const float *)data;
-			break;
-		case 4:
-			handle->beat_freq = (const float *)data;
-			break;
-		case 5:
 			handle->bar.audio = (float *)data;
 			handle->beat.audio = (float *)data;
 			break;
@@ -220,38 +309,10 @@ run(LV2_Handle instance, uint32_t nsamples)
 	plughandle_t *handle = instance;
 	uint32_t last_t = 0;
 
-	handle->bar.enabled = *handle->bar_enabled != 0.f;
-	handle->beat.enabled = *handle->beat_enabled != 0.f;
-
-	unsigned bar_freq = floor(*handle->bar_freq);
-	if(bar_freq != handle->bar.freq)
-	{
-		for(unsigned i=0; i<handle->bar.wave_len; i++)
-		{
-			handle->bar.wave[i] = sin(i * 2.f * M_PI * bar_freq / handle->rate) * amp;
-			if(i < handle->attack_len)
-				handle->bar.wave[i] *= (float)i / handle->attack_len;
-			else // >= handle->attack_len
-				handle->bar.wave[i] *= (float)(handle->bar.wave_len - i) / handle->decay_len;
-		}
-
-		handle->bar.freq = bar_freq;
-	}
-
-	unsigned beat_freq = floor(*handle->beat_freq);
-	if(beat_freq != handle->beat.freq)
-	{
-		for(unsigned i=0; i<handle->beat.wave_len; i++)
-		{
-			handle->beat.wave[i] = sin(i * 2.f * M_PI * beat_freq / handle->rate) * amp;
-			if(i < handle->attack_len)
-				handle->beat.wave[i] *= (float)i / handle->attack_len;
-			else // >= attack_len
-				handle->beat.wave[i] *= (float)(handle->beat.wave_len - i) / handle->decay_len;
-		}
-
-		handle->beat.freq = beat_freq;
-	}
+	const uint32_t capacity = handle->event_out->atom.size;
+	LV2_Atom_Forge_Frame frame;
+	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
 
 	// clear audio output buffer
 	memset(handle->bar.audio, 0x0, sizeof(float)*nsamples);
@@ -262,7 +323,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 		_play(handle, &handle->beat, last_t, ev->time.frames);
 
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
-		timely_advance(&handle->timely, obj, last_t, ev->time.frames);
+		if(!timely_advance(&handle->timely, obj, last_t, ev->time.frames))
+			props_advance(&handle->props, &handle->forge, ev->time.frames, obj, &ref);
 
 		last_t = ev->time.frames;
 	}
@@ -270,6 +332,11 @@ run(LV2_Handle instance, uint32_t nsamples)
 	_play(handle, &handle->bar, last_t, nsamples);
 	_play(handle, &handle->beat, last_t, nsamples);
 	timely_advance(&handle->timely, NULL, last_t, nsamples);
+
+	if(ref)
+		lv2_atom_forge_pop(&handle->forge, &frame);
+	else
+		lv2_atom_sequence_clear(handle->event_out);
 }
 
 static void
@@ -282,6 +349,39 @@ cleanup(LV2_Handle instance)
 	free(handle);
 }
 
+static LV2_State_Status
+_state_save(LV2_Handle instance, LV2_State_Store_Function store,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+}
+
+static LV2_State_Status
+_state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+}
+
+static const LV2_State_Interface state_iface = {
+	.save = _state_save,
+	.restore = _state_restore
+};
+
+static const void *
+extension_data(const char *uri)
+{
+	if(!strcmp(uri, LV2_STATE__interface))
+		return &state_iface;
+	return NULL;
+}
+
 const LV2_Descriptor orbit_click = {
 	.URI						= ORBIT_CLICK_URI,
 	.instantiate		= instantiate,
@@ -290,5 +390,5 @@ const LV2_Descriptor orbit_click = {
 	.run						= run,
 	.deactivate			= NULL,
 	.cleanup				= cleanup,
-	.extension_data	= NULL
+	.extension_data	= extension_data
 };

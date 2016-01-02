@@ -165,14 +165,38 @@ orbit:looper
 	] .
 
 # Click Plugin
+orbit:click_bar_enabled
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Bar Enabled" .
+orbit:click_beat_enabled
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Beat Enabled" .
+orbit:click_bar_note
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Bar Note" ;
+	units:unit units:midiNote ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+orbit:click_beat_note
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Beat Note" ;
+	units:unit units:midiNote ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+
 orbit:click
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Click" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+	lv2:extensionData	state:interface ;
 
 	lv2:port [
 		# sink event port
@@ -180,59 +204,41 @@ orbit:click
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports time:Position ;
+		atom:supports patch:Message ;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event Input" ;
 		lv2:designation lv2:control ;
 	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
+		# source event port
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports patch:Message;
 		lv2:index 1 ;
-		lv2:symbol "bar_enabled" ;
-		lv2:name "Bar enabled" ;
-		lv2:default 1 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
-		lv2:portProperty lv2:toggled ;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 2 ;
-		lv2:symbol "beat_enabled" ;
-		lv2:name "Beat enabled" ;
-		lv2:default 1 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
-		lv2:portProperty lv2:toggled ;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 3 ;
-		lv2:symbol "bar_freq" ;
-		lv2:name "Bar frequency" ;
-		lv2:default 1760 ;
-		lv2:minimum 20 ;
-		lv2:maximum 15000 ;
-		lv2:portProperty lv2:integer ;
-		units:unit units:hz ;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 4 ;
-		lv2:symbol "beat_freq" ;
-		lv2:name "Beat frequency" ;
-		lv2:default 880 ;
-		lv2:minimum 20 ;
-		lv2:maximum 15000 ;
-		lv2:portProperty lv2:integer ;
-		units:unit units:hz ;
+		lv2:symbol "event_out" ;
+		lv2:name "Event Output" ;
+		lv2:designation lv2:control ;
 	] , [
 		# source audio port
 	  a lv2:OutputPort ,
 			lv2:AudioPort ;
-		lv2:index 5 ;
+		lv2:index 2 ;
 		lv2:symbol "audio_out" ;
 		lv2:name "Audio Output" ;
+	] ;
+
+	patch:writable
+		orbit:click_bar_enabled ,
+		orbit:click_beat_enabled ,
+		orbit:click_bar_note ,
+		orbit:click_beat_note ;
+	
+	state:state [
+		orbit:click_bar_enabled true ;
+		orbit:click_beat_enabled true ;
+		orbit:click_bar_note 72 ;
+		orbit:click_beat_note 60 ;
 	] .
 
 # Pacemaker Plugin

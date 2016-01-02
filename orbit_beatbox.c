@@ -354,18 +354,10 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 {
 	plughandle_t *handle = (plughandle_t *)instance;
 
-	LV2_State_Status status = props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
-
-	// initialize mirror props
-	handle->bar_note_old = handle->bar_note;
-	handle->bar_channel_old = handle->bar_channel;
-	handle->beat_note_old = handle->beat_note;
-	handle->beat_channel_old = handle->beat_channel;
-
-	return status;
+	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
 }
 
-LV2_State_Interface state_iface = {
+static const LV2_State_Interface state_iface = {
 	.save = _state_save,
 	.restore = _state_restore
 };
