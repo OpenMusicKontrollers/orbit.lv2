@@ -26,6 +26,7 @@
 @prefix units:		<http://lv2plug.in/ns/extensions/units#> .
 @prefix work:			<http://lv2plug.in/ns/ext/worker#> .
 @prefix state:		<http://lv2plug.in/ns/ext/state#> .
+@prefix patch:		<http://lv2plug.in/ns/ext/patch#> .
 
 @prefix osc:  <http://open-music-kontrollers.ch/lv2/osc#> .
 @prefix lic:			<http://opensource.org/licenses/> .
@@ -450,14 +451,50 @@ orbit:cargoship
 	] .
 
 # Click Beatbox
+orbit:beatbox_bar_enabled
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Bar Enabled" .
+orbit:beatbox_beat_enabled
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Beat Enabled" .
+orbit:beatbox_bar_note
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Bar Note" ;
+	units:unit units:midiNote ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+orbit:beatbox_beat_note
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Beat Note" ;
+	units:unit units:midiNote ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+orbit:beatbox_bar_channel
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Bar Channel" ;
+	lv2:minimum 0 ;
+	lv2:maximum 15 .
+orbit:beatbox_beat_channel
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Beat Channel" ;
+	lv2:minimum 0 ;
+	lv2:maximum 15 .
+
 orbit:beatbox
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Beatbox" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+	lv2:extensionData	state:interface ;
 
 	lv2:port [
 		# sink event port
@@ -465,78 +502,37 @@ orbit:beatbox
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports time:Position ;
+		atom:supports patch:Message;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event Input" ;
 		lv2:designation lv2:control ;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 1 ;
-		lv2:symbol "bar_enabled" ;
-		lv2:name "Bar enabled" ;
-		lv2:default 1 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
-		lv2:portProperty lv2:toggled;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 2 ;
-		lv2:symbol "beat_enabled" ;
-		lv2:name "Beat enabled" ;
-		lv2:default 1 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
-		lv2:portProperty lv2:toggled;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 3 ;
-		lv2:symbol "bar_note" ;
-		lv2:name "Bar Note" ;
-		lv2:default 72 ;
-		lv2:minimum 0 ;
-		lv2:maximum 127 ;
-		lv2:portProperty lv2:integer;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 4 ;
-		lv2:symbol "beat_note" ;
-		lv2:name "Beat Note" ;
-		lv2:default 60 ;
-		lv2:minimum 0 ;
-		lv2:maximum 127 ;
-		lv2:portProperty lv2:integer;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 5 ;
-		lv2:symbol "bar_channel" ;
-		lv2:name "Bar Channel" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 7 ;
-		lv2:portProperty lv2:integer;
-	] , [
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 6 ;
-		lv2:symbol "beat_channel" ;
-		lv2:name "Beat Channel" ;
-		lv2:default 0 ;
-		lv2:minimum 0 ;
-		lv2:maximum 7 ;
-		lv2:portProperty lv2:integer;
 	] , [
 		# source event port
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
 		atom:supports midi:MidiEvent;
-		lv2:index 7 ;
+		atom:supports patch:Message;
+		lv2:index 1 ;
 		lv2:symbol "midi_out" ;
 		lv2:name "MIDI Output" ;
 		lv2:designation lv2:control ;
+	] ;
+
+	patch:writable
+		orbit:beatbox_bar_enabled ,
+		orbit:beatbox_beat_enabled ,
+		orbit:beatbox_bar_note ,
+		orbit:beatbox_beat_note ,
+		orbit:beatbox_bar_channel ,
+		orbit:beatbox_beat_channel ;
+
+	state:state [
+		orbit:beatbox_bar_enabled true ;
+		orbit:beatbox_beat_enabled true ;
+		orbit:beatbox_bar_note 72 ;
+		orbit:beatbox_beat_note 60 ;
+		orbit:beatbox_bar_channel 0 ;
+		orbit:beatbox_beat_channel 0 ;
 	] .

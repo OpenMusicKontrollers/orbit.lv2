@@ -21,6 +21,9 @@
 
 #include <orbit.h>
 #include <timely.h>
+#include <props.h>
+
+#define MAX_NPROPS 6
 
 typedef struct _plughandle_t plughandle_t;
 
@@ -35,25 +38,68 @@ struct _plughandle_t {
 	timely_t timely;
 
 	const LV2_Atom_Sequence *event_in;
-	const float *bar_enabled;
-	const float *beat_enabled;
-	const float *bar_note;
-	const float *beat_note;
-	const float *bar_channel;
-	const float *beat_channel;
 	LV2_Atom_Sequence *event_out;
 
-	bool bar_enabled_b;
-	bool beat_enabled_b;
-	uint8_t bar_note_i;
-	uint8_t beat_note_i;
-	uint8_t bar_channel_i;
-	uint8_t beat_channel_i;
+	int32_t bar_enabled;
+	int32_t beat_enabled;
+	int32_t bar_note;
+	int32_t beat_note;
+	int32_t bar_channel;
+	int32_t beat_channel;
+
+	int32_t bar_note_old;
+	int32_t beat_note_old;
+	int32_t bar_channel_old;
+	int32_t beat_channel_old;
 	bool bar_on;
 	bool beat_on;
+
+	PROPS_T(props, MAX_NPROPS);
 	
 	bool rolling;
 	LV2_Atom_Forge_Ref ref;
+};
+
+static const props_def_t stat_bar_enabled = {
+	.property = ORBIT_URI"#beatbox_bar_enabled",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_beat_enabled = {
+	.property = ORBIT_URI"#beatbox_beat_enabled",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_bar_note = {
+	.property = ORBIT_URI"#beatbox_bar_note",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_beat_note = {
+	.property = ORBIT_URI"#beatbox_beat_note",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_bar_channel = {
+	.property = ORBIT_URI"#beatbox_bar_channel",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_beat_channel = {
+	.property = ORBIT_URI"#beatbox_beat_channel",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
 };
 	
 static inline void
@@ -100,13 +146,13 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		{
 			if(handle->bar_on)
 			{
-				_note_off(handle, frames, handle->bar_channel_i, handle->bar_note_i);
+				_note_off(handle, frames, handle->bar_channel, handle->bar_note);
 				handle->bar_on = false;
 			}
 
 			if(handle->beat_on)
 			{
-				_note_off(handle, frames, handle->beat_channel_i, handle->beat_note_i);
+				_note_off(handle, frames, handle->beat_channel, handle->beat_note);
 				handle->beat_on = false;
 			}
 		}
@@ -119,13 +165,13 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 
 			if(handle->beat_on)
 			{
-				_note_off(handle, frames, handle->beat_channel_i, handle->beat_note_i);
+				_note_off(handle, frames, handle->beat_channel, handle->beat_note);
 				handle->beat_on = false;
 			}
 
-			if(handle->beat_enabled_b && (handle->bar_enabled_b ? !is_bar_start : true))
+			if(handle->beat_enabled && (handle->bar_enabled ? !is_bar_start : true))
 			{
-				_note_on(handle, frames, handle->beat_channel_i, handle->beat_note_i);
+				_note_on(handle, frames, handle->beat_channel, handle->beat_note);
 				handle->beat_on = true;
 			}
 		}
@@ -136,17 +182,49 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		{
 			if(handle->bar_on)
 			{
-				_note_off(handle, frames, handle->bar_channel_i, handle->bar_note_i);
+				_note_off(handle, frames, handle->bar_channel, handle->bar_note);
 				handle->bar_on = false;
 			}
 
-			if(handle->bar_enabled_b)
+			if(handle->bar_enabled)
 			{
-				_note_on(handle, frames, handle->bar_channel_i, handle->bar_note_i);
+				_note_on(handle, frames, handle->bar_channel, handle->bar_note);
 				handle->bar_on = true;
 			}
 		}
 	}
+}
+
+static void
+_bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	if(handle->bar_on)
+	{
+		_note_off(handle, frames, handle->bar_channel_old, handle->bar_note_old);
+		handle->bar_on = false;
+	}
+
+	handle->bar_note_old = handle->bar_note;
+	handle->bar_channel_old = handle->bar_channel;
+}
+
+static void
+_beat_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	if(handle->beat_on)
+	{
+		_note_off(handle, frames, handle->beat_channel_old, handle->beat_note_old);
+		handle->beat_on = false;
+	}
+
+	handle->beat_note_old = handle->beat_note;
+	handle->beat_channel_old = handle->beat_channel;
 }
 
 static LV2_Handle
@@ -179,6 +257,29 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
+	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
+	{
+		fprintf(stderr, "failed to initialize property structure\n");
+		free(handle);
+		return NULL;
+	}
+
+	if(  props_register(&handle->props, &stat_bar_enabled, PROP_EVENT_WRITE, _bar_intercept, &handle->bar_enabled)
+		&& props_register(&handle->props, &stat_beat_enabled, PROP_EVENT_WRITE, _beat_intercept, &handle->beat_enabled)
+		&& props_register(&handle->props, &stat_bar_note, PROP_EVENT_WRITE, _bar_intercept, &handle->bar_note)
+		&& props_register(&handle->props, &stat_beat_note, PROP_EVENT_WRITE, _beat_intercept, &handle->beat_note)
+		&& props_register(&handle->props, &stat_bar_channel, PROP_EVENT_WRITE, _bar_intercept, &handle->bar_channel)
+		&& props_register(&handle->props, &stat_beat_channel, PROP_EVENT_WRITE, _beat_intercept, &handle->beat_channel) )
+	{
+		props_sort(&handle->props);
+	}
+	else
+	{
+		fprintf(stderr, "failed to register properties\n");
+		free(handle);
+		return NULL;
+	}
+
 	return handle;
 }
 
@@ -193,24 +294,6 @@ connect_port(LV2_Handle instance, uint32_t port, void *data)
 			handle->event_in = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->bar_enabled = (const float *)data;
-			break;
-		case 2:
-			handle->beat_enabled = (const float *)data;
-			break;
-		case 3:
-			handle->bar_note = (const float *)data;
-			break;
-		case 4:
-			handle->beat_note = (const float *)data;
-			break;
-		case 5:
-			handle->bar_channel = (const float *)data;
-			break;
-		case 6:
-			handle->beat_channel = (const float *)data;
-			break;
-		case 7:
 			handle->event_out = (LV2_Atom_Sequence *)data;
 			break;
 		default:
@@ -229,38 +312,11 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
 	handle->ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
 
-	const bool bar_enabled_b = *handle->bar_enabled != 0.f;
-	const uint8_t bar_note_i = floor(*handle->bar_note);
-	const uint8_t bar_channel_i = floor(*handle->bar_channel);
-	if(  (bar_enabled_b != handle->bar_enabled_b)
-		|| (bar_note_i != handle->bar_note_i)
-		|| (bar_channel_i != handle->bar_channel_i) )
-	{
-		_note_off(handle, 0, handle->bar_channel_i, handle->bar_note_i);
-
-		handle->bar_enabled_b = bar_enabled_b;
-		handle->bar_note_i = bar_note_i;
-		handle->bar_channel_i = bar_channel_i;
-	}
-
-	const bool beat_enabled_b = *handle->beat_enabled != 0.f;
-	const uint8_t beat_note_i = floor(*handle->beat_note);
-	const uint8_t beat_channel_i = floor(*handle->beat_channel);
-	if(  (beat_enabled_b != handle->beat_enabled_b)
-		|| (beat_note_i != handle->beat_note_i)
-		|| (beat_channel_i != handle->beat_channel_i) )
-	{
-		 _note_off(handle, 0, handle->beat_channel_i, handle->beat_note_i);
-
-		handle->beat_enabled_b = beat_enabled_b;
-		handle->beat_note_i = beat_note_i;
-		handle->beat_channel_i = beat_channel_i;
-	}
-
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
-		timely_advance(&handle->timely, obj, last_t, ev->time.frames);
+		if(!timely_advance(&handle->timely, obj, last_t, ev->time.frames))
+			props_advance(&handle->props, &handle->forge, ev->time.frames, obj, &handle->ref);
 
 		last_t = ev->time.frames;
 	}
@@ -281,6 +337,47 @@ cleanup(LV2_Handle instance)
 	free(handle);
 }
 
+static LV2_State_Status
+_state_save(LV2_Handle instance, LV2_State_Store_Function store,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+}
+
+static LV2_State_Status
+_state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	LV2_State_Status status = props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+
+	// initialize mirror props
+	handle->bar_note_old = handle->bar_note;
+	handle->bar_channel_old = handle->bar_channel;
+	handle->beat_note_old = handle->beat_note;
+	handle->beat_channel_old = handle->beat_channel;
+
+	return status;
+}
+
+LV2_State_Interface state_iface = {
+	.save = _state_save,
+	.restore = _state_restore
+};
+
+static const void *
+extension_data(const char *uri)
+{
+	if(!strcmp(uri, LV2_STATE__interface))
+		return &state_iface;
+	return NULL;
+}
+
 const LV2_Descriptor orbit_beatbox = {
 	.URI						= ORBIT_BEATBOX_URI,
 	.instantiate		= instantiate,
@@ -289,5 +386,5 @@ const LV2_Descriptor orbit_beatbox = {
 	.run						= run,
 	.deactivate			= NULL,
 	.cleanup				= cleanup,
-	.extension_data	= NULL
+	.extension_data	= extension_data
 };
