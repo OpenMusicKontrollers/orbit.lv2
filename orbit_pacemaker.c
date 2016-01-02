@@ -20,6 +20,9 @@
 #include <math.h>
 
 #include <orbit.h>
+#include <props.h>
+
+#define MAX_NPROPS 5
 
 typedef struct _position_t position_t;
 typedef struct _plughandle_t plughandle_t;
@@ -54,59 +57,155 @@ struct _plughandle_t {
 	} urid;
 
 	LV2_Atom_Forge forge;
+	LV2_Atom_Forge_Ref ref;
+
 	position_t pos;
 
 	double frames_per_bar;
 	double frames_per_beat;
 	double rel;
 
+	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
-	const float *beat_unit;
-	const float *beats_per_bar;
-	const float *beats_per_minute;
-	const float *rolling;
-	const float *rewind;
 
-	int beat_unit_i;
-	int beats_per_bar_i;
-	int beats_per_minute_i;
-	bool rolling_i;
+	int32_t beat_unit;
+	int32_t beats_per_bar;
+	int32_t beats_per_minute;
+	int32_t rolling;
+	int32_t rewind;
+
+	PROPS_T(props, MAX_NPROPS);
 };
 
-static inline void
-_position_atomize(plughandle_t *handle, LV2_Atom_Forge *forge, position_t *pos)
+static const props_def_t stat_beat_unit = {
+	.property = ORBIT_URI"#pacemaker_beat_unit",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_beats_per_bar = {
+	.property = ORBIT_URI"#pacemaker_beats_per_bar",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_beats_per_minute = {
+	.property = ORBIT_URI"#pacemaker_beats_per_minute",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_rolling = {
+	.property = ORBIT_URI"#pacemaker_rolling",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_rewind = {
+	.property = ORBIT_URI"#pacemaker_rewind",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static inline LV2_Atom_Forge_Ref
+_position_atomize(plughandle_t *handle, LV2_Atom_Forge *forge, int64_t frames,
+	position_t *pos)
 {
-	LV2_Atom_Forge_Ref ref;
 	LV2_Atom_Forge_Frame frame;
 
-	lv2_atom_forge_frame_time(forge, 0);
-	lv2_atom_forge_object(forge, &frame, 0, handle->urid.time_position);
+	LV2_Atom_Forge_Ref ref = lv2_atom_forge_frame_time(forge, frames);
+	if(ref)
+		ref = lv2_atom_forge_object(forge, &frame, 0, handle->urid.time_position);
 
-	lv2_atom_forge_key(forge, handle->urid.time_barBeat);
-	lv2_atom_forge_float(forge, pos->bar_beat);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, handle->urid.time_barBeat);
+	if(ref)
+		ref = lv2_atom_forge_float(forge, pos->bar_beat);
 
-	lv2_atom_forge_key(forge, handle->urid.time_bar);
-	lv2_atom_forge_long(forge, pos->bar);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, handle->urid.time_bar);
+	if(ref)
+		ref = lv2_atom_forge_long(forge, pos->bar);
 
-	lv2_atom_forge_key(forge, handle->urid.time_beatUnit);
-	lv2_atom_forge_int(forge, pos->beat_unit);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, handle->urid.time_beatUnit);
+	if(ref)
+		ref = lv2_atom_forge_int(forge, pos->beat_unit);
 
-	lv2_atom_forge_key(forge, handle->urid.time_beatsPerBar);
-	lv2_atom_forge_float(forge, pos->beats_per_bar);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, handle->urid.time_beatsPerBar);
+	if(ref)
+		ref = lv2_atom_forge_float(forge, pos->beats_per_bar);
 
-	lv2_atom_forge_key(forge, handle->urid.time_beatsPerMinute);
-	lv2_atom_forge_float(forge, pos->beats_per_minute);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, handle->urid.time_beatsPerMinute);
+	if(ref)
+		ref = lv2_atom_forge_float(forge, pos->beats_per_minute);
 
-	lv2_atom_forge_key(forge, handle->urid.time_frame);
-	lv2_atom_forge_long(forge, pos->frame);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, handle->urid.time_frame);
+	if(ref)
+		ref = lv2_atom_forge_long(forge, pos->frame);
 
-	lv2_atom_forge_key(forge, handle->urid.time_framesPerSecond);
-	lv2_atom_forge_float(forge, pos->frames_per_second);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, handle->urid.time_framesPerSecond);
+	if(ref)
+		ref = lv2_atom_forge_float(forge, pos->frames_per_second);
 
-	lv2_atom_forge_key(forge, handle->urid.time_speed);
-	lv2_atom_forge_float(forge, pos->speed);
+	if(ref)
+		ref = lv2_atom_forge_key(forge, handle->urid.time_speed);
+	if(ref)
+		ref = lv2_atom_forge_float(forge, pos->speed);
 
-	lv2_atom_forge_pop(forge, &frame);
+	if(ref)
+		lv2_atom_forge_pop(forge, &frame);
+
+	return ref;
+}
+
+static void
+_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+	position_t *pos = &handle->pos;
+
+	// update mirror props
+	pos->beat_unit = handle->beat_unit;
+	pos->beats_per_bar = handle->beats_per_bar;
+	pos->beats_per_minute = handle->beats_per_minute;
+	pos->speed = handle->rolling ? 1.f : 0.f;
+
+	// derive current position as bar_beat
+	pos->bar_beat = handle->rel / handle->frames_per_bar * pos->beats_per_bar;
+
+	if( (impl->def == &stat_rolling) && handle->rewind) // start/stop rolling
+	{
+		pos->frame = 0; // reset frame pointer
+		pos->bar = 0; // reset bar
+		pos->bar_beat = 0.f; // reset beat
+		handle->rel = 0.0;
+	}
+
+	if(pos->bar_beat >= pos->beats_per_bar) // move to end of bar if beat overflows bar
+	{
+		double integral;
+		float frac = modf(pos->bar_beat, &integral);
+		(void)integral;
+		pos->bar_beat = pos->beats_per_bar - 1.f + frac;
+	}
+
+	if(handle->ref)
+		handle->ref = _position_atomize(handle, &handle->forge, frames, pos);
+
+	// update frames_per_beat and frames_per_bar
+	handle->frames_per_beat = 240.0 / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
+	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 }
 
 static LV2_Handle
@@ -155,33 +254,43 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
+	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
+	{
+		fprintf(stderr, "failed to initialize property structure\n");
+		free(handle);
+		return NULL;
+	}
+
+	if(  props_register(&handle->props, &stat_beat_unit, PROP_EVENT_WRITE, _intercept, &handle->beat_unit)
+		&& props_register(&handle->props, &stat_beats_per_bar, PROP_EVENT_WRITE, _intercept, &handle->beats_per_bar)
+		&& props_register(&handle->props, &stat_beats_per_minute, PROP_EVENT_WRITE, _intercept, &handle->beats_per_minute)
+		&& props_register(&handle->props, &stat_rolling, PROP_EVENT_WRITE, _intercept, &handle->rolling)
+		&& props_register(&handle->props, &stat_rewind, PROP_EVENT_NONE, NULL, &handle->rewind) )
+	{
+		props_sort(&handle->props);
+	}
+	else
+	{
+		fprintf(stderr, "failed to register properties\n");
+		free(handle);
+		return NULL;
+	}
+
 	return handle;
 }
 
 static void
 connect_port(LV2_Handle instance, uint32_t port, void *data)
 {
-	plughandle_t *handle = (plughandle_t *)instance;
+	plughandle_t *handle = instance;
 
 	switch(port)
 	{
 		case 0:
-			handle->event_out = (LV2_Atom_Sequence *)data;
+			handle->event_in = (const LV2_Atom_Sequence *)data;
 			break;
 		case 1:
-			handle->beat_unit = (const float *)data;
-			break;
-		case 2:
-			handle->beats_per_bar = (const float *)data;
-			break;
-		case 3:
-			handle->beats_per_minute = (const float *)data;
-			break;
-		case 4:
-			handle->rolling = (const float *)data;
-			break;
-		case 5:
-			handle->rewind = (const float *)data;
+			handle->event_out = (LV2_Atom_Sequence *)data;
 			break;
 		default:
 			break;
@@ -207,71 +316,11 @@ activate(LV2_Handle instance)
 	handle->rel = 0.0;
 }
 
-static void
-run(LV2_Handle instance, uint32_t nsamples)
+static inline void
+_advance(plughandle_t *handle, uint32_t from, uint32_t to)
 {
-	plughandle_t *handle = instance;
 	position_t *pos = &handle->pos;
-
-	uint32_t capacity = handle->event_out->atom.size;
-	LV2_Atom_Forge_Frame frame;
-	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
-	lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
-
-	int beat_unit_i = floor(*handle->beat_unit);
-	int beats_per_bar_i = floor(*handle->beats_per_bar);
-	int beats_per_minute_i = floor(*handle->beats_per_minute);
-	bool rolling_i = floor(*handle->rolling);
-	bool rewind_i = floor(*handle->rewind);
-
-	bool needs_update = false;
-
-	if(beat_unit_i != handle->beat_unit_i)
-		needs_update = true;
-	if(beats_per_bar_i != handle->beats_per_bar_i)
-		needs_update = true;
-	if(beats_per_minute_i != handle->beats_per_minute_i)
-		needs_update = true;
-	if(rolling_i != handle->rolling_i)
-		needs_update = true;
-
-	if(needs_update)
-	{
-		// derive current position as bar_beat
-		pos->bar_beat = handle->rel / handle->frames_per_bar * pos->beats_per_bar;
-
-		pos->beat_unit = beat_unit_i;
-		pos->beats_per_bar = beats_per_bar_i;
-		pos->beats_per_minute = beats_per_minute_i;
-		pos->speed = rolling_i ? 1.f : 0.f;
-
-		if( (rolling_i != handle->rolling_i) && rewind_i) // start/stop rolling
-		{
-			pos->frame = 0; // reset frame pointer
-			pos->bar = 0; // reset bar
-			pos->bar_beat = 0.f; // reset beat
-			handle->rel = 0.0;
-		}
-
-		if(pos->bar_beat >= pos->beats_per_bar) // move to end of bar if beat overflows bar
-		{
-			double integral;
-			float frac = modf(pos->bar_beat, &integral);
-			(void)integral;
-			pos->bar_beat = pos->beats_per_bar - 1.f + frac;
-		}
-
-		_position_atomize(handle, &handle->forge, pos);
-
-		handle->beat_unit_i = beat_unit_i;
-		handle->beats_per_bar_i = beats_per_bar_i;
-		handle->beats_per_minute_i = beats_per_minute_i;
-		handle->rolling_i = rolling_i;
-
-		// update frames_per_beat and frames_per_bar
-		handle->frames_per_beat = 240.0 / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
-		handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
-	}
+	const uint32_t nsamples = to - from;
 
 	if(pos->speed > 0.f)
 	{
@@ -286,8 +335,35 @@ run(LV2_Handle instance, uint32_t nsamples)
 			handle->rel -= handle->frames_per_bar;
 		}
 	}
+}
 
-	lv2_atom_forge_pop(&handle->forge, &frame);
+static void
+run(LV2_Handle instance, uint32_t nsamples)
+{
+	uint32_t last_t = 0;
+	plughandle_t *handle = instance;
+	position_t *pos = &handle->pos;
+
+	uint32_t capacity = handle->event_out->atom.size;
+	LV2_Atom_Forge_Frame frame;
+	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
+	handle->ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
+
+	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
+	{
+		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
+
+		_advance(handle, last_t, ev->time.frames);
+		props_advance(&handle->props, &handle->forge, ev->time.frames, obj, &handle->ref);
+
+		last_t = ev->time.frames;
+	}
+	_advance(handle, last_t, nsamples);
+
+	if(handle->ref)
+		lv2_atom_forge_pop(&handle->forge, &frame);
+	else
+		lv2_atom_sequence_clear(handle->event_out);
 }
 
 static void
@@ -298,6 +374,39 @@ cleanup(LV2_Handle instance)
 	free(handle);
 }
 
+static LV2_State_Status
+_state_save(LV2_Handle instance, LV2_State_Store_Function store,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = instance;
+
+	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+}
+
+static LV2_State_Status
+_state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = instance;
+
+	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+}
+
+static const LV2_State_Interface state_iface = {
+	.save = _state_save,
+	.restore = _state_restore
+};
+
+static const void *
+extension_data(const char *uri)
+{
+	if(!strcmp(uri, LV2_STATE__interface))
+		return &state_iface;
+	return NULL;
+}
+
 const LV2_Descriptor orbit_pacemaker = {
 	.URI						= ORBIT_PACEMAKER_URI,
 	.instantiate		= instantiate,
@@ -306,5 +415,5 @@ const LV2_Descriptor orbit_pacemaker = {
 	.run						= run,
 	.deactivate			= NULL,
 	.cleanup				= cleanup,
-	.extension_data	= NULL
+	.extension_data	= extension_data
 };
