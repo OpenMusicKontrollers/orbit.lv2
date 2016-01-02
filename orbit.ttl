@@ -400,56 +400,6 @@ orbit:tapdancer
 		units:unit units:bpm ;
 	] .
 
-# Cargoship Plugin
-orbit:cargoship
-	a lv2:Plugin ,
-		lv2:ConverterPlugin ;
-	doap:name "Orbit Cargoship" ;
-	doap:license lic:Artistic-2.0 ;
-	lv2:project proj:orbit ;
-	lv2:extensionData work:interface, state:interface ;
-	lv2:requiredFeature work:schedule, urid:map, state:makePath ;
-	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-
-	lv2:port [
-		# sink event port
-	  a lv2:InputPort ,
-			atom:AtomPort ;
-		atom:bufferType atom:Sequence ;
-		atom:supports midi:MidiEvent ;
-		atom:supports time:Position ;
-		atom:supports atom:Object ;
-		atom:supports osc:Event ;
-		lv2:index 0 ;
-		lv2:symbol "event_in" ;
-		lv2:name "Event Input" ;
-		lv2:designation lv2:control ;
-	] , [
-		# source event port
-	  a lv2:OutputPort ,
-			atom:AtomPort ;
-		atom:bufferType atom:Sequence ;
-		atom:supports midi:MidiEvent ;
-		atom:supports time:Position ;
-		atom:supports atom:Object ;
-		atom:supports osc:Event ;
-		lv2:index 1 ;
-		lv2:symbol "event_out" ;
-		lv2:name "Event Output" ;
-		lv2:designation lv2:control ;
-	] , [
-		# control input ports
-	  a lv2:InputPort ,
-			lv2:ControlPort ;
-		lv2:index 2 ;
-		lv2:symbol "record" ;
-		lv2:name "Record" ;
-		lv2:default 1 ;
-		lv2:minimum 0 ;
-		lv2:maximum 1 ;
-		lv2:portProperty lv2:toggled;
-	] .
-
 # Click Beatbox
 orbit:beatbox_bar_enabled
 	a lv2:Parameter ;

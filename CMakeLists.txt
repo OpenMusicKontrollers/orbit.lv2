@@ -42,7 +42,6 @@ add_library(orbit MODULE
 	orbit_click.c
 	orbit_pacemaker.c
 	orbit_tapdancer.c
-	orbit_cargoship.c
 	orbit_beatbox.c)
 target_link_libraries(orbit ${LIBS})
 set_target_properties(orbit PROPERTIES PREFIX "")
