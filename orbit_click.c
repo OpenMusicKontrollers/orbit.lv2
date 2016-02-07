@@ -118,7 +118,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 	{
 		if(handle->rolling)
 		{
-			bool is_bar_start = fmod(TIMELY_BAR_BEAT(timely), TIMELY_BEATS_PER_BAR(timely)) == 0.f;
+			bool is_bar_start = fmod(TIMELY_BAR_BEAT_RAW(timely), TIMELY_BEATS_PER_BAR(timely)) == 0.f;
 
 			if(handle->beat.enabled && (handle->bar.enabled ? !is_bar_start : true))
 			{

@@ -225,7 +225,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 	else if(type == TIMELY_URI_BAR_BEAT(timely))
 	{
 		double beats = (double)TIMELY_BAR(timely) * TIMELY_BEATS_PER_BAR(timely)
-			+ TIMELY_BAR_BEAT(timely);
+			+ TIMELY_BAR_BEAT_RAW(timely);
 
 		if(handle->punch == PUNCH_BEAT)
 			handle->offset = fmod(beats, handle->width) * TIMELY_FRAMES_PER_BEAT(timely);
