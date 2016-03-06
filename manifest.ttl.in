@@ -24,7 +24,7 @@ orbit:looper
 	a lv2:Plugin ;
 	lv2:minorVersion @ORBIT_MINOR_VERSION@ ;
 	lv2:microVersion @ORBIT_MICRO_VERSION@ ;
-	lv2:binary <orbit@LIB_EXT@> ;
+	lv2:binary <orbit@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <orbit.ttl> .
 
 # Orbit Click
@@ -32,7 +32,7 @@ orbit:click
 	a lv2:Plugin ;
 	lv2:minorVersion @ORBIT_MINOR_VERSION@ ;
 	lv2:microVersion @ORBIT_MICRO_VERSION@ ;
-	lv2:binary <orbit@LIB_EXT@> ;
+	lv2:binary <orbit@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <orbit.ttl> .
 
 # Orbit Pacemaker
@@ -40,7 +40,7 @@ orbit:pacemaker
 	a lv2:Plugin ;
 	lv2:minorVersion @ORBIT_MINOR_VERSION@ ;
 	lv2:microVersion @ORBIT_MICRO_VERSION@ ;
-	lv2:binary <orbit@LIB_EXT@> ;
+	lv2:binary <orbit@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <orbit.ttl> .
 
 # Orbit Tapdancer
@@ -48,7 +48,7 @@ orbit:tapdancer
 	a lv2:Plugin ;
 	lv2:minorVersion @ORBIT_MINOR_VERSION@ ;
 	lv2:microVersion @ORBIT_MICRO_VERSION@ ;
-	lv2:binary <orbit@LIB_EXT@> ;
+	lv2:binary <orbit@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <orbit.ttl> .
 
 # Orbit Beatbox
@@ -56,5 +56,5 @@ orbit:beatbox
 	a lv2:Plugin ;
 	lv2:minorVersion @ORBIT_MINOR_VERSION@ ;
 	lv2:microVersion @ORBIT_MICRO_VERSION@ ;
-	lv2:binary <orbit@LIB_EXT@> ;
+	lv2:binary <orbit@CMAKE_SHARED_MODULE_SUFFIX@> ;
 	rdfs:seeAlso <orbit.ttl> .

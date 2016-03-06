@@ -21,13 +21,6 @@ set(ORBIT_VERSION "${ORBIT_MAJOR_VERSION}.${ORBIT_MINOR_VERSION}.${ORBIT_MICRO_V
 add_definitions("-DORBIT_VERSION=\"${ORBIT_VERSION}\"")
 
 set(DEST lib/lv2/orbit.lv2)
-if(WIN32)
-	set(LIB_EXT ".dll")
-elseif(APPLE)
-	set(LIB_EXT ".so")
-else()
-	set(LIB_EXT ".so")
-endif()
 
 find_package(PkgConfig) # ${PKG_CONFIG_FOUND}
 
