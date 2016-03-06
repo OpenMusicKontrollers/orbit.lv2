@@ -14,6 +14,7 @@
 # http://www.perlfoundation.org/artistic_license_2_0.
 
 @prefix owl:			<http://www.w3.org/2002/07/owl#> .
+@prefix xsd:			<http://www.w3.org/2001/XMLSchema#> .
 @prefix foaf:			<http://xmlns.com/foaf/0.1/> .
 @prefix doap:			<http://usefulinc.com/ns/doap#> .
 @prefix rdf:			<http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -28,7 +29,7 @@
 @prefix state:		<http://lv2plug.in/ns/ext/state#> .
 @prefix patch:		<http://lv2plug.in/ns/ext/patch#> .
 
-@prefix osc:  <http://open-music-kontrollers.ch/lv2/osc#> .
+@prefix osc:			<http://open-music-kontrollers.ch/lv2/osc#> .
 @prefix lic:			<http://opensource.org/licenses/> .
 @prefix omk:			<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:			<http://open-music-kontrollers.ch/lv2/> .
@@ -489,4 +490,63 @@ orbit:beatbox
 		orbit:beatbox_beat_note 60 ;
 		orbit:beatbox_bar_channel 0 ;
 		orbit:beatbox_beat_channel 0 ;
+	] .
+
+# Click Subspace
+orbit:subspace_mode
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Mode" ;
+	lv2:minimum 0 ;
+	lv2:maximum 1 ;
+	lv2:scalePoint [ rdfs:label "Multiply" ; rdf:value 0 ] ;
+	lv2:scalePoint [ rdfs:label "Divide" ; rdf:value 1 ] .
+orbit:subspace_factor
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Factor" ;
+	lv2:minimum 1 ;
+	lv2:maximum 64 .
+
+orbit:subspace
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Orbit Subspace" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:orbit ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
+	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+	lv2:extensionData	state:interface ;
+
+	lv2:port [
+		# sink event port
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports time:Position ;
+		atom:supports patch:Message;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Time Input" ;
+		lv2:designation lv2:control ;
+	] , [
+		# source event port
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports time:Position ;
+		atom:supports patch:Message;
+		lv2:index 1 ;
+		lv2:symbol "event_out" ;
+		lv2:name "Time Output" ;
+		lv2:designation lv2:control ;
+	] ;
+
+	patch:writable
+		orbit:subspace_mode ,
+		orbit:subspace_factor ;
+
+	state:state [
+		orbit:subspace_mode 0;
+		orbit:subspace_factor 1;
 	] .
