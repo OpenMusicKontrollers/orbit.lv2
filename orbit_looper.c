@@ -63,6 +63,7 @@ struct _plughandle_t {
 
 	float window;
 	int64_t offset;
+	int64_t last;
 
 	PROPS_T(props, MAX_NPROPS);
 
@@ -133,16 +134,24 @@ _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 		const int64_t beat_frames = handle->ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
 
 		if(beat_frames >= handle->offset)
-			break; // event not part of this region
+			break; // event not part of this period
 
-		// append event
-		const LV2_Atom *atom = &handle->ev->body;
-		if(handle->ref)
-			handle->ref = lv2_atom_forge_frame_time(&handle->forge, beat_frames - rel);
-		if(handle->ref)
-			handle->ref = lv2_atom_forge_raw(&handle->forge, atom, lv2_atom_total_size(atom));
-		if(handle->ref)
-			lv2_atom_forge_pad(&handle->forge, atom->size);
+		const int64_t frames = beat_frames - rel;
+
+		// check for time jump! skip out-of-order event, as it probably has already been forged...
+		if(frames >= handle->last) //TODO can this be solved more elegantly?
+		{
+			// append event
+			const LV2_Atom *atom = &handle->ev->body;
+			if(handle->ref)
+				handle->ref = lv2_atom_forge_frame_time(&handle->forge, frames);
+			if(handle->ref)
+				handle->ref = lv2_atom_forge_raw(&handle->forge, atom, lv2_atom_total_size(atom));
+			if(handle->ref)
+				lv2_atom_forge_pad(&handle->forge, atom->size);
+
+			handle->last = frames; // advance frame time head
+		}
 
 		handle->ev = lv2_atom_sequence_next(handle->ev);
 	}
@@ -367,6 +376,8 @@ static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
+
+	handle->last = 0; // reset frame time head
 
 	const uint32_t capacity = handle->event_out->atom.size;
 	LV2_Atom_Forge_Frame frame;
