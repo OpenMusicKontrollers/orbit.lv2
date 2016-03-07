@@ -550,3 +550,103 @@ orbit:subspace
 		orbit:subspace_mode 0;
 		orbit:subspace_factor 1;
 	] .
+
+# CargoShip Plugin
+orbit:cargoship_punch
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Punch Mode" ;
+	lv2:minimum 0 ;
+	lv2:maximum 1 ;
+	lv2:scalePoint [ rdfs:label "Beat" ;	rdf:value 0 ] ;
+	lv2:scalePoint [ rdfs:label "Bar" ;		rdf:value 1 ] .
+orbit:cargoship_width
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Width" ;
+	lv2:minimum 1 ;
+	lv2:maximum 128 .
+orbit:cargoship_mute
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Mute" .
+orbit:cargoship_switch
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:label "Switch" .
+
+orbit:cargoship_play_capacity
+	a lv2:Parameter ;
+	rdfs:range atom:Float ;
+	rdfs:label "Playback Capacity" ;
+	units:unit units:pc ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 100.0 .
+orbit:cargoship_rec_capacity
+	a lv2:Parameter ;
+	rdfs:range atom:Float ;
+	rdfs:label "Recording Capacity" ;
+	units:unit units:pc ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 100.0 .
+orbit:cargoship_position
+	a lv2:Parameter ;
+	rdfs:range atom:Float ;
+	rdfs:label "Position" ;
+	units:unit units:pc ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 100.0 .
+
+orbit:cargoship
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Orbit CargoShip" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:orbit ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
+	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
+	lv2:extensionData	state:interface ;
+
+	lv2:port [
+		# sink event port
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		atom:supports time:Position ;
+		atom:supports osc:Event ;
+		atom:supports patch:Message ;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Event Input" ;
+		lv2:designation lv2:control ;
+	] , [
+		# source event port
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent ;
+		atom:supports osc:Event ;
+		atom:supports patch:Message ;
+		lv2:index 1 ;
+		lv2:symbol "event_out" ;
+		lv2:name "Event Output" ;
+		lv2:designation lv2:control ;
+	] ;
+
+	patch:writable
+		orbit:cargoship_punch ,
+		orbit:cargoship_width ,
+		orbit:cargoship_mute ,
+		orbit:cargoship_switch ;
+	patch:readable
+		orbit:cargoship_play_capacity ,
+		orbit:cargoship_rec_capacity ,
+		orbit:cargoship_position ;
+
+	state:state [
+		orbit:cargoship_punch 1 ;
+		orbit:cargoship_width 4 ;
+		orbit:cargoship_mute false ;
+		orbit:cargoship_switch false ;
+	] .

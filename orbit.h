@@ -41,6 +41,7 @@
 #define ORBIT_TAPDANCER_URI					ORBIT_URI"#tapdancer"
 #define ORBIT_BEATBOX_URI						ORBIT_URI"#beatbox"
 #define ORBIT_SUBSPACE_URI					ORBIT_URI"#subspace"
+#define ORBIT_CARGOSHIP_URI					ORBIT_URI"#cargoship"
 
 extern const LV2_Descriptor orbit_looper;
 extern const LV2_Descriptor orbit_click;
@@ -48,5 +49,6 @@ extern const LV2_Descriptor orbit_pacemaker;
 extern const LV2_Descriptor orbit_tapdancer;
 extern const LV2_Descriptor orbit_beatbox;
 extern const LV2_Descriptor orbit_subspace;
+extern const LV2_Descriptor orbit_cargoship;
 
 #endif // _ORBIT_LV2_H
