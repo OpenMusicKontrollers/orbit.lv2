@@ -45,6 +45,7 @@ struct _plughandle_t {
 		LV2_URID play_capacity;
 		LV2_URID rec_capacity;
 		LV2_URID position;
+		LV2_URID beat_time;
 	} urid;
 	
 	timely_t timely;
@@ -292,6 +293,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
+	handle->urid.beat_time = handle->map->map(handle->map->handle, LV2_ATOM__beatTime);
+
 	timely_mask_t mask = TIMELY_MASK_BAR_BEAT
 		//| TIMELY_MASK_BAR
 		| TIMELY_MASK_BEAT_UNIT
@@ -363,12 +366,12 @@ activate(LV2_Handle instance)
 
 	play_seq->atom.type = handle->forge.Sequence;
 	play_seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
-	play_seq->body.unit = 0;
+	play_seq->body.unit = handle->urid.beat_time;
 	play_seq->body.pad = 0;
 
 	rec_seq->atom.type = handle->forge.Sequence;
 	rec_seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
-	rec_seq->body.unit = 0;
+	rec_seq->body.unit = handle->urid.beat_time;
 	rec_seq->body.pad = 0;
 }
 
