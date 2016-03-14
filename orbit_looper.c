@@ -58,9 +58,9 @@ struct _plughandle_t {
 	int32_t mute;
 	int32_t switsch;
 
-	float play_capacity;
-	float rec_capacity;
-	float position;
+	int32_t play_capacity;
+	int32_t rec_capacity;
+	int32_t position;
 
 	float window;
 	int64_t offset;
@@ -105,21 +105,21 @@ static const props_def_t stat_switch = {
 static const props_def_t stat_play_capacity = {
 	.property = ORBIT_URI"#looper_play_capacity",
 	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Float,
+	.type = LV2_ATOM__Int,
 	.mode = PROP_MODE_STATIC
 };
 
 static const props_def_t stat_rec_capacity = {
 	.property = ORBIT_URI"#looper_rec_capacity",
 	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Float,
+	.type = LV2_ATOM__Int,
 	.mode = PROP_MODE_STATIC
 };
 
 static const props_def_t stat_position = {
 	.property = ORBIT_URI"#looper_position",
 	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Float,
+	.type = LV2_ATOM__Int,
 	.mode = PROP_MODE_STATIC
 };
 
@@ -416,21 +416,21 @@ run(LV2_Handle instance, uint32_t nsamples)
 	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
 	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
 
-	const float play_capacity = BUF_PERCENT * play_seq->atom.size;
-	const float rec_capacity = BUF_PERCENT * rec_seq->atom.size;
-	const float position = handle->offset * handle->window;
+	const int32_t play_capacity = BUF_PERCENT * play_seq->atom.size;
+	const int32_t rec_capacity = BUF_PERCENT * rec_seq->atom.size;
+	const int32_t position = handle->offset * handle->window;
 
-	if(handle->ref && (fabsf(play_capacity - handle->play_capacity) > 0.1) ) //FIXME
+	if(handle->ref && (play_capacity != handle->play_capacity) )
 	{
 		handle->play_capacity = play_capacity;
 		handle->ref = props_set(&handle->props, &handle->forge, nsamples-1, handle->urid.play_capacity);
 	}
-	if(handle->ref && (fabsf(rec_capacity - handle->rec_capacity) > 0.1) ) //FIXME
+	if(handle->ref && (rec_capacity != handle->rec_capacity) )
 	{
 		handle->rec_capacity = rec_capacity;
 		handle->ref = props_set(&handle->props, &handle->forge, nsamples-1, handle->urid.rec_capacity);
 	}
-	if(handle->ref && (fabsf(position - handle->position) > 0.1) ) //FIXME
+	if(handle->ref && (position != handle->position) )
 	{
 		handle->position = position;
 		handle->ref = props_set(&handle->props, &handle->forge, nsamples-1, handle->urid.position);

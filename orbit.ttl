@@ -79,25 +79,25 @@ orbit:looper_switch
 
 orbit:looper_play_capacity
 	a lv2:Parameter ;
-	rdfs:range atom:Float ;
+	rdfs:range atom:Int ;
 	rdfs:label "Playback Capacity" ;
 	units:unit units:pc ;
-	lv2:minimum 0.0 ;
-	lv2:maximum 100.0 .
+	lv2:minimum 0 ;
+	lv2:maximum 100 .
 orbit:looper_rec_capacity
 	a lv2:Parameter ;
-	rdfs:range atom:Float ;
+	rdfs:range atom:Int ;
 	rdfs:label "Recording Capacity" ;
 	units:unit units:pc ;
-	lv2:minimum 0.0 ;
-	lv2:maximum 100.0 .
+	lv2:minimum 0 ;
+	lv2:maximum 100 .
 orbit:looper_position
 	a lv2:Parameter ;
-	rdfs:range atom:Float ;
+	rdfs:range atom:Int ;
 	rdfs:label "Position" ;
 	units:unit units:pc ;
-	lv2:minimum 0.0 ;
-	lv2:maximum 100.0 .
+	lv2:minimum 0 ;
+	lv2:maximum 100 .
 
 orbit:looper
 	a lv2:Plugin ,
