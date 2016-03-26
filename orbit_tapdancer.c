@@ -249,6 +249,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
+	mlock(handle, sizeof(plughandle_t));
 
 	handle->pos.frames_per_second = rate;
 
@@ -393,6 +394,7 @@ cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
+	munlock(handle, sizeof(plughandle_t));
 	free(handle);
 }
 

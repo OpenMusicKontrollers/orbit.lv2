@@ -184,6 +184,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	plughandle_t *handle = calloc(1, sizeof(plughandle_t));
 	if(!handle)
 		return NULL;
+	mlock(handle, sizeof(plughandle_t));
 
 	for(unsigned i=0; features[i]; i++)
 	{
@@ -234,9 +235,11 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	// Generate one cycle of a sine wave at the desired frequency
 	handle->bar.wave_len = handle->attack_len + handle->decay_len;
 	handle->bar.wave = malloc(handle->bar.wave_len * sizeof(float));
+	mlock(handle->bar.wave, handle->bar.wave_len * sizeof(float));
 
 	handle->beat.wave_len = handle->attack_len + handle->decay_len;
 	handle->beat.wave = malloc(handle->beat.wave_len * sizeof(float));
+	mlock(handle->beat.wave, handle->beat.wave_len * sizeof(float));
 
 	return handle;
 }
@@ -344,8 +347,11 @@ cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
+	munlock(handle->bar.wave, handle->bar.wave_len * sizeof(float));
 	free(handle->bar.wave);
+	munlock(handle->beat.wave, handle->beat.wave_len * sizeof(float));
 	free(handle->beat.wave);
+	munlock(handle, sizeof(plughandle_t));
 	free(handle);
 }
 
