@@ -25,6 +25,7 @@
 #define MAX_NPROPS 5
 
 typedef struct _position_t position_t;
+typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
 
 struct _position_t {
@@ -39,6 +40,14 @@ struct _position_t {
 	float frames_per_second;
 
 	float speed;
+};
+
+struct _plugstate_t {
+	int32_t beat_unit;
+	int32_t beats_per_bar;
+	int32_t beats_per_minute;
+	int32_t rolling;
+	int32_t rewind;
 };
 
 struct _plughandle_t {
@@ -68,49 +77,13 @@ struct _plughandle_t {
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
 
-	int32_t beat_unit;
-	int32_t beats_per_bar;
-	int32_t beats_per_minute;
-	int32_t rolling;
-	int32_t rewind;
+	plugstate_t state;
+	plugstate_t stash;
 
 	PROPS_T(props, MAX_NPROPS);
 };
 
-static const props_def_t stat_beat_unit = {
-	.property = ORBIT_URI"#pacemaker_beat_unit",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_beats_per_bar = {
-	.property = ORBIT_URI"#pacemaker_beats_per_bar",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_beats_per_minute = {
-	.property = ORBIT_URI"#pacemaker_beats_per_minute",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_rolling = {
-	.property = ORBIT_URI"#pacemaker_rolling",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_rewind = {
-	.property = ORBIT_URI"#pacemaker_rewind",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
+static const props_def_t stat_rolling;
 
 static inline LV2_Atom_Forge_Ref
 _position_atomize(plughandle_t *handle, LV2_Atom_Forge *forge, int64_t frames,
@@ -176,15 +149,15 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	position_t *pos = &handle->pos;
 
 	// update mirror props
-	pos->beat_unit = handle->beat_unit;
-	pos->beats_per_bar = handle->beats_per_bar;
-	pos->beats_per_minute = handle->beats_per_minute;
-	pos->speed = handle->rolling ? 1.f : 0.f;
+	pos->beat_unit = handle->state.beat_unit;
+	pos->beats_per_bar = handle->state.beats_per_bar;
+	pos->beats_per_minute = handle->state.beats_per_minute;
+	pos->speed = handle->state.rolling ? 1.f : 0.f;
 
 	// derive current position as bar_beat
 	pos->bar_beat = handle->rel / handle->frames_per_bar * pos->beats_per_bar;
 
-	if( (impl->def == &stat_rolling) && handle->rewind) // start/stop rolling
+	if( (impl->def == &stat_rolling) && handle->state.rewind) // start/stop rolling
 	{
 		pos->frame = 0; // reset frame pointer
 		pos->bar = 0; // reset bar
@@ -207,6 +180,49 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	handle->frames_per_beat = 240.0 / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
 	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 }
+
+static const props_def_t stat_beat_unit = {
+	.property = ORBIT_URI"#pacemaker_beat_unit",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _intercept
+};
+
+static const props_def_t stat_beats_per_bar = {
+	.property = ORBIT_URI"#pacemaker_beats_per_bar",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _intercept
+};
+
+static const props_def_t stat_beats_per_minute = {
+	.property = ORBIT_URI"#pacemaker_beats_per_minute",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _intercept
+};
+
+static const props_def_t stat_rolling = {
+	.property = ORBIT_URI"#pacemaker_rolling",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _intercept
+};
+
+static const props_def_t stat_rewind = {
+	.property = ORBIT_URI"#pacemaker_rewind",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
@@ -262,15 +278,11 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  props_register(&handle->props, &stat_beat_unit, PROP_EVENT_WRITE, _intercept, &handle->beat_unit)
-		&& props_register(&handle->props, &stat_beats_per_bar, PROP_EVENT_WRITE, _intercept, &handle->beats_per_bar)
-		&& props_register(&handle->props, &stat_beats_per_minute, PROP_EVENT_WRITE, _intercept, &handle->beats_per_minute)
-		&& props_register(&handle->props, &stat_rolling, PROP_EVENT_WRITE, _intercept, &handle->rolling)
-		&& props_register(&handle->props, &stat_rewind, PROP_EVENT_NONE, NULL, &handle->rewind) )
-	{
-		props_sort(&handle->props);
-	}
-	else
+	if(  !props_register(&handle->props, &stat_beat_unit, &handle->state.beat_unit, &handle->stash.beat_unit)
+		|| !props_register(&handle->props, &stat_beats_per_bar, &handle->state.beats_per_bar, &handle->stash.beats_per_bar)
+		|| !props_register(&handle->props, &stat_beats_per_minute, &handle->state.beats_per_minute, &handle->stash.beats_per_minute)
+		|| !props_register(&handle->props, &stat_rolling, &handle->state.rolling, &handle->stash.rolling)
+		|| !props_register(&handle->props, &stat_rewind, &handle->state.rewind, &handle->stash.rewind) )
 	{
 		fprintf(stderr, "failed to register properties\n");
 		free(handle);

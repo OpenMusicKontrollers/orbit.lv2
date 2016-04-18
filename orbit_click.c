@@ -27,6 +27,7 @@
 
 typedef enum _state_t state_t;
 typedef struct _wave_t wave_t;
+typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
 
 enum _state_t {
@@ -36,12 +37,18 @@ enum _state_t {
 
 struct _wave_t {
 	state_t state;        // Current play state
-	int32_t enabled;
 	unsigned freq;
 	uint32_t wave_len;
 	uint32_t wave_offset;  // Current play offset in the wave
 	float *wave;
 	float *audio;
+};
+
+struct _plugstate_t {
+	int32_t bar_enabled;
+	int32_t beat_enabled;
+	int32_t bar_note;
+	int32_t beat_note;
 };
 
 struct _plughandle_t {
@@ -53,11 +60,11 @@ struct _plughandle_t {
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
 
-	int32_t bar_note;
-	int32_t beat_note;
-
 	wave_t beat;
 	wave_t bar;
+
+	plugstate_t state;
+	plugstate_t stash;
 
 	PROPS_T(props, MAX_NPROPS);
 
@@ -70,6 +77,48 @@ struct _plughandle_t {
 static const float attack_s = 0.005;
 static const float decay_s  = 0.075;
 static const float amp = 0.5;
+
+static inline float
+_midi2cps(float pitch)
+{
+	return exp2f( (pitch - 69.f) / 12.f) * 440.f;
+}
+
+static void
+_bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	handle->bar.freq = _midi2cps(handle->state.bar_note);
+
+	for(unsigned i=0; i<handle->bar.wave_len; i++)
+	{
+		handle->bar.wave[i] = sin(i * 2.f * M_PI * handle->bar.freq / handle->rate) * amp;
+		if(i < handle->attack_len)
+			handle->bar.wave[i] *= (float)i / handle->attack_len;
+		else // >= handle->attack_len
+			handle->bar.wave[i] *= (float)(handle->bar.wave_len - i) / handle->decay_len;
+	}
+}
+
+static void
+_beat_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
+	props_event_t event, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	handle->beat.freq = _midi2cps(handle->state.beat_note);
+
+	for(unsigned i=0; i<handle->beat.wave_len; i++)
+	{
+		handle->beat.wave[i] = sin(i * 2.f * M_PI * handle->beat.freq / handle->rate) * amp;
+		if(i < handle->attack_len)
+			handle->beat.wave[i] *= (float)i / handle->attack_len;
+		else // >= attack_len
+			handle->beat.wave[i] *= (float)(handle->beat.wave_len - i) / handle->decay_len;
+	}
+}
 
 static const props_def_t stat_bar_enabled = {
 	.property = ORBIT_URI"#click_bar_enabled",
@@ -89,21 +138,19 @@ static const props_def_t stat_bar_note = {
 	.property = ORBIT_URI"#click_bar_note",
 	.access = LV2_PATCH__writable,
 	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _bar_intercept
 };
 
 static const props_def_t stat_beat_note = {
 	.property = ORBIT_URI"#click_beat_note",
 	.access = LV2_PATCH__writable,
 	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _beat_intercept
 };
-
-static inline float
-_midi2cps(float pitch)
-{
-	return exp2f( (pitch - 69.f) / 12.f) * 440.f;
-}
 
 static void
 _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
@@ -120,7 +167,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		{
 			bool is_bar_start = fmod(TIMELY_BAR_BEAT_RAW(timely), TIMELY_BEATS_PER_BAR(timely)) == 0.f;
 
-			if(handle->beat.enabled && (handle->bar.enabled ? !is_bar_start : true))
+			if(handle->state.beat_enabled && (handle->state.bar_enabled ? !is_bar_start : true))
 			{
 				handle->beat.state = STATE_ON;
 				handle->beat.wave_offset = 0;
@@ -131,7 +178,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 	{
 		if(handle->rolling)
 		{
-			if(handle->bar.enabled)
+			if(handle->state.bar_enabled)
 			{
 				handle->bar.state = STATE_ON;
 				handle->bar.wave_offset = 0;
@@ -139,43 +186,6 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 		}
 	}
 }
-
-static void
-_bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
-	props_event_t event, props_impl_t *impl)
-{
-	plughandle_t *handle = data;
-
-	handle->bar.freq = _midi2cps(handle->bar_note);
-
-	for(unsigned i=0; i<handle->bar.wave_len; i++)
-	{
-		handle->bar.wave[i] = sin(i * 2.f * M_PI * handle->bar.freq / handle->rate) * amp;
-		if(i < handle->attack_len)
-			handle->bar.wave[i] *= (float)i / handle->attack_len;
-		else // >= handle->attack_len
-			handle->bar.wave[i] *= (float)(handle->bar.wave_len - i) / handle->decay_len;
-	}
-}
-
-static void
-_beat_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
-	props_event_t event, props_impl_t *impl)
-{
-	plughandle_t *handle = data;
-
-	handle->beat.freq = _midi2cps(handle->beat_note);
-
-	for(unsigned i=0; i<handle->beat.wave_len; i++)
-	{
-		handle->beat.wave[i] = sin(i * 2.f * M_PI * handle->beat.freq / handle->rate) * amp;
-		if(i < handle->attack_len)
-			handle->beat.wave[i] *= (float)i / handle->attack_len;
-		else // >= attack_len
-			handle->beat.wave[i] *= (float)(handle->beat.wave_len - i) / handle->decay_len;
-	}
-}
-
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
@@ -213,14 +223,10 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  props_register(&handle->props, &stat_bar_enabled, PROP_EVENT_NONE, NULL, &handle->bar.enabled)
-		&& props_register(&handle->props, &stat_beat_enabled, PROP_EVENT_NONE, NULL, &handle->beat.enabled)
-		&& props_register(&handle->props, &stat_bar_note, PROP_EVENT_WRITE, _bar_intercept, &handle->bar_note)
-		&& props_register(&handle->props, &stat_beat_note, PROP_EVENT_WRITE, _beat_intercept, &handle->beat_note) )
-	{
-		props_sort(&handle->props);
-	}
-	else
+	if(  !props_register(&handle->props, &stat_bar_enabled, &handle->state.bar_enabled, &handle->stash.bar_enabled)
+		|| !props_register(&handle->props, &stat_beat_enabled, &handle->state.beat_enabled, &handle->stash.beat_enabled)
+		|| !props_register(&handle->props, &stat_bar_note, &handle->state.bar_note, &handle->stash.bar_note)
+		|| !props_register(&handle->props, &stat_beat_note, &handle->state.beat_note, &handle->stash.beat_note) )
 	{
 		fprintf(stderr, "failed to register properties\n");
 		free(handle);

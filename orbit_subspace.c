@@ -25,7 +25,13 @@
 
 #define MAX_NPROPS 2
 
+typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
+
+struct _plugstate_t {
+	int32_t mode;
+	int32_t factor;
+};
 
 enum {
 	MODE_MULTIPLY = 0,
@@ -46,24 +52,10 @@ struct _plughandle_t {
 	int32_t beat_unit;
 	float beats_per_bar;
 
-	int32_t mode;
-	int32_t factor;
+	plugstate_t state;
+	plugstate_t stash;
 
 	PROPS_T(props, MAX_NPROPS);
-};
-
-static const props_def_t stat_mode = {
-	.property = ORBIT_URI"#subspace_mode",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_factor = {
-	.property = ORBIT_URI"#subspace_factor",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
 };
 
 static inline LV2_Atom_Forge_Ref
@@ -76,17 +68,17 @@ _position_atomize(plughandle_t *handle, LV2_Atom_Forge *forge, int64_t frames)
 	int32_t beat_unit = TIMELY_BEAT_UNIT(timely);
 	float beats_per_bar = TIMELY_BEATS_PER_BAR(timely);
 
-	if(handle->mode == MODE_MULTIPLY)
+	if(handle->state.mode == MODE_MULTIPLY)
 	{
-		bar_beat *= handle->factor;
-		beat_unit *= handle->factor;
-		beats_per_bar *= handle->factor;
+		bar_beat *= handle->state.factor;
+		beat_unit *= handle->state.factor;
+		beats_per_bar *= handle->state.factor;
 	}
 	else
 	{
-		bar_beat /= handle->factor;
-		beat_unit /= handle->factor;
-		beats_per_bar /= handle->factor;
+		bar_beat /= handle->state.factor;
+		beat_unit /= handle->state.factor;
+		beats_per_bar /= handle->state.factor;
 	}
 
 	LV2_Atom_Forge_Frame frame;
@@ -150,6 +142,24 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 		handle->ref = _position_atomize(handle, forge, frames);
 }
 
+static const props_def_t stat_mode = {
+	.property = ORBIT_URI"#subspace_mode",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _intercept
+};
+
+static const props_def_t stat_factor = {
+	.property = ORBIT_URI"#subspace_factor",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _intercept
+};
+
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
 	const char *bundle_path, const LV2_Feature *const *features)
@@ -184,12 +194,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  props_register(&handle->props, &stat_mode, PROP_EVENT_WRITE, _intercept, &handle->mode)
-		&& props_register(&handle->props, &stat_factor, PROP_EVENT_WRITE, _intercept, &handle->factor) )
-	{
-		props_sort(&handle->props);
-	}
-	else
+	if(  !props_register(&handle->props, &stat_mode, &handle->state.mode, &handle->stash.mode)
+		|| !props_register(&handle->props, &stat_factor, &handle->state.factor, &handle->stash.factor) )
 	{
 		fprintf(stderr, "failed to register properties\n");
 		free(handle);

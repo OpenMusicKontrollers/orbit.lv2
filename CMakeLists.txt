@@ -34,7 +34,6 @@ add_library(orbit MODULE
 	orbit_looper.c
 	orbit_click.c
 	orbit_pacemaker.c
-	orbit_tapdancer.c
 	orbit_beatbox.c
 	orbit_subspace.c
 	orbit_cargoship.c)

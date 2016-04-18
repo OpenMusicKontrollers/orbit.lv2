@@ -25,7 +25,17 @@
 
 #define MAX_NPROPS 6
 
+typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
+
+struct _plugstate_t {
+	int32_t bar_enabled;
+	int32_t beat_enabled;
+	int32_t bar_note;
+	int32_t beat_note;
+	int32_t bar_channel;
+	int32_t beat_channel;
+};
 
 struct _plughandle_t {
 	struct {
@@ -40,12 +50,8 @@ struct _plughandle_t {
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
 
-	int32_t bar_enabled;
-	int32_t beat_enabled;
-	int32_t bar_note;
-	int32_t beat_note;
-	int32_t bar_channel;
-	int32_t beat_channel;
+	plugstate_t state;
+	plugstate_t stash;
 
 	int32_t bar_note_old;
 	int32_t beat_note_old;
@@ -60,48 +66,6 @@ struct _plughandle_t {
 	LV2_Atom_Forge_Ref ref;
 };
 
-static const props_def_t stat_bar_enabled = {
-	.property = ORBIT_URI"#beatbox_bar_enabled",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_beat_enabled = {
-	.property = ORBIT_URI"#beatbox_beat_enabled",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_bar_note = {
-	.property = ORBIT_URI"#beatbox_bar_note",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_beat_note = {
-	.property = ORBIT_URI"#beatbox_beat_note",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_bar_channel = {
-	.property = ORBIT_URI"#beatbox_bar_channel",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_beat_channel = {
-	.property = ORBIT_URI"#beatbox_beat_channel",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-	
 static inline void
 _note(plughandle_t *handle, uint8_t frames, uint8_t cmd, uint8_t channel, uint8_t note)
 {
@@ -134,68 +98,6 @@ _note_off(plughandle_t *handle, int64_t frames, uint8_t channel, uint8_t note)
 }
 
 static void
-_cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
-{
-	plughandle_t *handle = data;
-
-	if(type == TIMELY_URI_SPEED(timely))
-	{
-		handle->rolling = TIMELY_SPEED(timely) > 0.f ? true : false;
-
-		if(!handle->rolling)
-		{
-			if(handle->bar_on)
-			{
-				_note_off(handle, frames, handle->bar_channel, handle->bar_note);
-				handle->bar_on = false;
-			}
-
-			if(handle->beat_on)
-			{
-				_note_off(handle, frames, handle->beat_channel, handle->beat_note);
-				handle->beat_on = false;
-			}
-		}
-	}
-	else if(type == TIMELY_URI_BAR_BEAT(timely))
-	{
-		if(handle->rolling)
-		{
-			bool is_bar_start = fmod(TIMELY_BAR_BEAT_RAW(timely), TIMELY_BEATS_PER_BAR(timely)) == 0.f;
-
-			if(handle->beat_on)
-			{
-				_note_off(handle, frames, handle->beat_channel, handle->beat_note);
-				handle->beat_on = false;
-			}
-
-			if(handle->beat_enabled && (handle->bar_enabled ? !is_bar_start : true))
-			{
-				_note_on(handle, frames, handle->beat_channel, handle->beat_note);
-				handle->beat_on = true;
-			}
-		}
-	}
-	else if(type == TIMELY_URI_BAR(timely))
-	{
-		if(handle->rolling)
-		{
-			if(handle->bar_on)
-			{
-				_note_off(handle, frames, handle->bar_channel, handle->bar_note);
-				handle->bar_on = false;
-			}
-
-			if(handle->bar_enabled)
-			{
-				_note_on(handle, frames, handle->bar_channel, handle->bar_note);
-				handle->bar_on = true;
-			}
-		}
-	}
-}
-
-static void
 _bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	props_event_t event, props_impl_t *impl)
 {
@@ -207,8 +109,8 @@ _bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 		handle->bar_on = false;
 	}
 
-	handle->bar_note_old = handle->bar_note;
-	handle->bar_channel_old = handle->bar_channel;
+	handle->bar_note_old = handle->state.bar_note;
+	handle->bar_channel_old = handle->state.bar_channel;
 }
 
 static void
@@ -223,8 +125,124 @@ _beat_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 		handle->beat_on = false;
 	}
 
-	handle->beat_note_old = handle->beat_note;
-	handle->beat_channel_old = handle->beat_channel;
+	handle->beat_note_old = handle->state.beat_note;
+	handle->beat_channel_old = handle->state.beat_channel;
+}
+
+static const props_def_t stat_bar_enabled = {
+	.property = ORBIT_URI"#beatbox_bar_enabled",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _bar_intercept
+};
+
+static const props_def_t stat_beat_enabled = {
+	.property = ORBIT_URI"#beatbox_beat_enabled",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _beat_intercept
+};
+
+static const props_def_t stat_bar_note = {
+	.property = ORBIT_URI"#beatbox_bar_note",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _bar_intercept
+};
+
+static const props_def_t stat_beat_note = {
+	.property = ORBIT_URI"#beatbox_beat_note",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _beat_intercept
+};
+
+static const props_def_t stat_bar_channel = {
+	.property = ORBIT_URI"#beatbox_bar_channel",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _bar_intercept
+};
+
+static const props_def_t stat_beat_channel = {
+	.property = ORBIT_URI"#beatbox_beat_channel",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC,
+	.event_mask = PROP_EVENT_WRITE,
+	.event_cb = _beat_intercept
+};
+
+static void
+_cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
+{
+	plughandle_t *handle = data;
+
+	if(type == TIMELY_URI_SPEED(timely))
+	{
+		handle->rolling = TIMELY_SPEED(timely) > 0.f ? true : false;
+
+		if(!handle->rolling)
+		{
+			if(handle->bar_on)
+			{
+				_note_off(handle, frames, handle->state.bar_channel, handle->state.bar_note);
+				handle->bar_on = false;
+			}
+
+			if(handle->beat_on)
+			{
+				_note_off(handle, frames, handle->state.beat_channel, handle->state.beat_note);
+				handle->beat_on = false;
+			}
+		}
+	}
+	else if(type == TIMELY_URI_BAR_BEAT(timely))
+	{
+		if(handle->rolling)
+		{
+			bool is_bar_start = fmod(TIMELY_BAR_BEAT_RAW(timely), TIMELY_BEATS_PER_BAR(timely)) == 0.f;
+
+			if(handle->beat_on)
+			{
+				_note_off(handle, frames, handle->state.beat_channel, handle->state.beat_note);
+				handle->beat_on = false;
+			}
+
+			if(handle->state.beat_enabled && (handle->state.bar_enabled ? !is_bar_start : true))
+			{
+				_note_on(handle, frames, handle->state.beat_channel, handle->state.beat_note);
+				handle->beat_on = true;
+			}
+		}
+	}
+	else if(type == TIMELY_URI_BAR(timely))
+	{
+		if(handle->rolling)
+		{
+			if(handle->bar_on)
+			{
+				_note_off(handle, frames, handle->state.bar_channel, handle->state.bar_note);
+				handle->bar_on = false;
+			}
+
+			if(handle->state.bar_enabled)
+			{
+				_note_on(handle, frames, handle->state.bar_channel, handle->state.bar_note);
+				handle->bar_on = true;
+			}
+		}
+	}
 }
 
 static LV2_Handle
@@ -265,16 +283,12 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  props_register(&handle->props, &stat_bar_enabled, PROP_EVENT_WRITE, _bar_intercept, &handle->bar_enabled)
-		&& props_register(&handle->props, &stat_beat_enabled, PROP_EVENT_WRITE, _beat_intercept, &handle->beat_enabled)
-		&& props_register(&handle->props, &stat_bar_note, PROP_EVENT_WRITE, _bar_intercept, &handle->bar_note)
-		&& props_register(&handle->props, &stat_beat_note, PROP_EVENT_WRITE, _beat_intercept, &handle->beat_note)
-		&& props_register(&handle->props, &stat_bar_channel, PROP_EVENT_WRITE, _bar_intercept, &handle->bar_channel)
-		&& props_register(&handle->props, &stat_beat_channel, PROP_EVENT_WRITE, _beat_intercept, &handle->beat_channel) )
-	{
-		props_sort(&handle->props);
-	}
-	else
+	if(  !props_register(&handle->props, &stat_bar_enabled, &handle->state.bar_enabled, &handle->stash.bar_enabled)
+		|| !props_register(&handle->props, &stat_beat_enabled, &handle->state.beat_enabled, &handle->stash.beat_enabled)
+		|| !props_register(&handle->props, &stat_bar_note, &handle->state.bar_note, &handle->stash.bar_note)
+		|| !props_register(&handle->props, &stat_beat_note, &handle->state.beat_note, &handle->stash.beat_note)
+		|| !props_register(&handle->props, &stat_bar_channel, &handle->state.bar_channel, &handle->stash.bar_channel)
+		|| !props_register(&handle->props, &stat_beat_channel, &handle->state.beat_channel, &handle->stash.beat_channel) )
 	{
 		fprintf(stderr, "failed to register properties\n");
 		free(handle);
