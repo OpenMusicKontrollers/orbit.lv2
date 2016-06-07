@@ -26,7 +26,7 @@ Get more information at: [http://open-music-kontrollers.ch/lv2/orbit](http://ope
 
 ### License
 
-Copyright (c) 2015 Hanspeter Portner (dev@open-music-kontrollers.ch)
+Copyright (c) 2015-2016 Hanspeter Portner (dev@open-music-kontrollers.ch)
 
 This is free software: you can redistribute it and/or modify
 it under the terms of the Artistic License 2.0 as published by
