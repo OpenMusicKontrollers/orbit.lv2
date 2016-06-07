@@ -10,22 +10,28 @@ include_directories(${PROJECT_BINARY_DIR})
 
 set(CMAKE_C_FLAGS "-std=gnu99 -Wextra -Wno-unused-parameter -ffast-math -fvisibility=hidden ${CMAKE_C_FLAGS}")
 set(CMAKE_C_FLAGS "-Wshadow -Wimplicit-function-declaration -Wredundant-decls -Wmissing-prototypes -Wstrict-prototypes ${CMAKE_C_FLAGS}")
-set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,nodelete ${CMAKE_MODULE_LINKER_FLAGS}")
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+	set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,defs ${CMAKE_MODULE_LINKER_FLAGS}")
+	set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-z,nodelete ${CMAKE_MODULE_LINKER_FLAGS}")
+endif()
 add_definitions("-D_GNU_SOURCE=1") # asprintf
 
-set(ORBIT_MAJOR_VERSION 0)
-set(ORBIT_MINOR_VERSION 1)
-set(ORBIT_MICRO_VERSION 1)
-set(ORBIT_VERSION "${ORBIT_MAJOR_VERSION}.${ORBIT_MINOR_VERSION}.${ORBIT_MICRO_VERSION}")
+file(STRINGS "VERSION" ORBIT_VERSION)
+string(REPLACE "." ";" VERSION_LIST ${ORBIT_VERSION})
+list(GET VERSION_LIST 0 ORBIT_MAJOR_VERSION)
+list(GET VERSION_LIST 1 ORBIT_MINOR_VERSION)
+list(GET VERSION_LIST 2 ORBIT_MICRO_VERSION)
 add_definitions("-DORBIT_VERSION=\"${ORBIT_VERSION}\"")
 
-set(DEST lib/lv2/orbit.lv2)
+if(NOT DEFINED PLUGIN_DEST)
+	set(PLUGIN_DEST lib/lv2/orbit.lv2)
+endif()
 
 find_package(PkgConfig) # ${PKG_CONFIG_FOUND}
 
-pkg_search_module(ZLIB REQUIRED zlib)
-include_directories(${ZLIB_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${ZLIB_LDFLAGS})
+#pkg_search_module(ZLIB REQUIRED zlib)
+#include_directories(${ZLIB_INCLUDE_DIRS})
+#set(LIBS ${LIBS} ${ZLIB_LDFLAGS})
 
 # orbit
 add_library(orbit MODULE
@@ -36,11 +42,11 @@ add_library(orbit MODULE
 	orbit_beatbox.c
 	orbit_subspace.c
 	orbit_cargoship.c)
-target_link_libraries(orbit ${LIBS})
+target_link_libraries(orbit m ${LIBS})
 set_target_properties(orbit PROPERTIES PREFIX "")
-install(TARGETS orbit DESTINATION ${DEST})
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/orbit.ttl DESTINATION ${DEST})
+install(TARGETS orbit DESTINATION ${PLUGIN_DEST})
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/orbit.ttl DESTINATION ${PLUGIN_DEST})
 
 # manifest
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.ttl.in ${PROJECT_BINARY_DIR}/manifest.ttl)
-install(FILES ${PROJECT_BINARY_DIR}/manifest.ttl DESTINATION ${DEST})
+install(FILES ${PROJECT_BINARY_DIR}/manifest.ttl DESTINATION ${PLUGIN_DEST})
