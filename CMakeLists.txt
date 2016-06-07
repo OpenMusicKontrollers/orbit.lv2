@@ -29,6 +29,9 @@ endif()
 
 find_package(PkgConfig) # ${PKG_CONFIG_FOUND}
 
+pkg_search_module(LV2 REQUIRED lv2)
+include_directories(${LV2_INCLUDE_DIRS})
+
 #pkg_search_module(ZLIB REQUIRED zlib)
 #include_directories(${ZLIB_INCLUDE_DIRS})
 #set(LIBS ${LIBS} ${ZLIB_LDFLAGS})
