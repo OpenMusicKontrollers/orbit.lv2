@@ -58,6 +58,7 @@ orbit:looper_punch
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Punch Mode" ;
+	rdfs:comment "toggle to switch between bar and beat punch modes" ;
 	lv2:minimum 0 ;
 	lv2:maximum 1 ;
 	lv2:scalePoint [ rdfs:label "Beat" ;	rdf:value 0 ] ;
@@ -66,21 +67,25 @@ orbit:looper_width
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Width" ;
+	rdfs:comment "set to number of beats or bars to loop over" ;
 	lv2:minimum 1 ;
 	lv2:maximum 128 .
 orbit:looper_mute
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to mute playback or not" ;
 	rdfs:label "Mute" .
 orbit:looper_switch
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
 	rdfs:label "Switch" .
 
 orbit:looper_play_capacity
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Playback Capacity" ;
+	rdfs:comment "shows used fraction of total playback capacity" ;
 	units:unit units:pc ;
 	lv2:minimum 0 ;
 	lv2:maximum 100 .
@@ -88,6 +93,7 @@ orbit:looper_rec_capacity
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Recording Capacity" ;
+	rdfs:comment "shows used fraction of total recording capacity" ;
 	units:unit units:pc ;
 	lv2:minimum 0 ;
 	lv2:maximum 100 .
@@ -95,6 +101,7 @@ orbit:looper_position
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Position" ;
+	rdfs:comment "shows current position relative to loop width" ;
 	units:unit units:pc ;
 	lv2:minimum 0 ;
 	lv2:maximum 100 .
@@ -157,15 +164,18 @@ orbit:looper
 orbit:click_bar_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable/disable clicks on bars" ;
 	rdfs:label "Bar Enabled" .
 orbit:click_beat_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable/disable clicks on beats" ;
 	rdfs:label "Beat Enabled" .
 orbit:click_bar_note
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Bar Note" ;
+	rdfs:comment "set MIDI Note for bars" ;
 	units:unit units:midiNote ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -173,6 +183,7 @@ orbit:click_beat_note
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Beat Note" ;
+	rdfs:comment "set MIDI Note for beats" ;
 	units:unit units:midiNote ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -235,6 +246,7 @@ orbit:pacemaker_beat_unit
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Beat Unit" ;
+	rdfs:comment "set beat unit, e.g whole, half, quarter notes, ..." ;
 	lv2:minimum 1 ;
 	lv2:maximum 128 ;
 	lv2:scalePoint [ rdfs:label "1/1" ;						rdf:value 1 ] ;
@@ -249,6 +261,7 @@ orbit:pacemaker_beats_per_bar
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Beats per Bar" ;
+	rdfs:comment "set beats per bar" ;
 	units:unit units:beat ;
 	lv2:minimum 1 ;
 	lv2:maximum 128 .
@@ -256,16 +269,19 @@ orbit:pacemaker_beats_per_minute
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Beats per Minute" ;
+	rdfs:comment "set tempo as beats per minute" ;
 	units:unit units:bpm ;
 	lv2:minimum 1 ;
 	lv2:maximum 400 .
 orbit:pacemaker_rolling
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to get transport rolling or to stop" ;
 	rdfs:label "Rolling" .
 orbit:pacemaker_rewind
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to rewind at transport stop" ;
 	rdfs:label "Rewind" .
 
 orbit:pacemaker
@@ -320,15 +336,18 @@ orbit:pacemaker
 orbit:beatbox_bar_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to send events on bars" ;
 	rdfs:label "Bar Enabled" .
 orbit:beatbox_beat_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to send events on beats" ;
 	rdfs:label "Beat Enabled" .
 orbit:beatbox_bar_note
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Bar Note" ;
+	rdfs:comment "set MIDI note for bars" ;
 	units:unit units:midiNote ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
@@ -336,18 +355,21 @@ orbit:beatbox_beat_note
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Beat Note" ;
+	rdfs:comment "set MIDI note for beats" ;
 	units:unit units:midiNote ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
 orbit:beatbox_bar_channel
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
+	rdfs:comment "set MIDI channel to send bar events on" ;
 	rdfs:label "Bar Channel" ;
 	lv2:minimum 0 ;
 	lv2:maximum 15 .
 orbit:beatbox_beat_channel
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
+	rdfs:comment "set MIDI channel to send beat events on" ;
 	rdfs:label "Beat Channel" ;
 	lv2:minimum 0 ;
 	lv2:maximum 15 .
@@ -408,6 +430,7 @@ orbit:subspace_mode
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Mode" ;
+	rdfs:comment "set mode to either multiply or divide" ;
 	lv2:minimum 0 ;
 	lv2:maximum 1 ;
 	lv2:scalePoint [ rdfs:label "Multiply" ; rdf:value 0 ] ;
@@ -416,6 +439,7 @@ orbit:subspace_factor
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Factor" ;
+	rdfs:comment "set multiplication or divsion factor, depends on chosen mode" ;
 	lv2:minimum 1 ;
 	lv2:maximum 64 .
 
@@ -467,6 +491,7 @@ orbit:cargoship_punch
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Punch Mode" ;
+	rdfs:comment "toggle to switch between bar and beat punch modes" ;
 	lv2:minimum 0 ;
 	lv2:maximum 1 ;
 	lv2:scalePoint [ rdfs:label "Beat" ;	rdf:value 0 ] ;
@@ -475,21 +500,25 @@ orbit:cargoship_width
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
 	rdfs:label "Width" ;
+	rdfs:comment "set to number of beats or bars to loop over" ;
 	lv2:minimum 1 ;
 	lv2:maximum 128 .
 orbit:cargoship_mute
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
 	rdfs:label "Mute" .
 orbit:cargoship_switch
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
 	rdfs:label "Switch" .
 
 orbit:cargoship_play_capacity
 	a lv2:Parameter ;
 	rdfs:range atom:Float ;
 	rdfs:label "Playback Capacity" ;
+	rdfs:comment "shows used fraction of total playback capacity" ;
 	units:unit units:pc ;
 	lv2:minimum 0.0 ;
 	lv2:maximum 100.0 .
@@ -497,6 +526,7 @@ orbit:cargoship_rec_capacity
 	a lv2:Parameter ;
 	rdfs:range atom:Float ;
 	rdfs:label "Recording Capacity" ;
+	rdfs:comment "shows used fraction of total recording capacity" ;
 	units:unit units:pc ;
 	lv2:minimum 0.0 ;
 	lv2:maximum 100.0 .
@@ -504,6 +534,7 @@ orbit:cargoship_position
 	a lv2:Parameter ;
 	rdfs:range atom:Float ;
 	rdfs:label "Position" ;
+	rdfs:comment "shows current position relative to loop width" ;
 	units:unit units:pc ;
 	lv2:minimum 0.0 ;
 	lv2:maximum 100.0 .
