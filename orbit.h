@@ -33,12 +33,13 @@
 #include <lv2/lv2plug.in/ns/ext/midi/midi.h>
 #include <lv2/lv2plug.in/ns/ext/state/state.h>
 #include <lv2/lv2plug.in/ns/ext/worker/worker.h>
+#include <lv2/lv2plug.in/ns/ext/log/log.h>
+#include <lv2/lv2plug.in/ns/ext/log/logger.h>
 #include <lv2/lv2plug.in/ns/lv2core/lv2.h>
 
 #define ORBIT_URI										"http://open-music-kontrollers.ch/lv2/orbit"
 
 #define ORBIT_PATH_URI							ORBIT_URI"#Path"
-#define ORBIT_DRAIN_URI							ORBIT_URI"#Drain"
 
 // plugin uris
 #define ORBIT_LOOPER_URI						ORBIT_URI"#looper"

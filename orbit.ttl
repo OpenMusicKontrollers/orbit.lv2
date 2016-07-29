@@ -487,57 +487,30 @@ orbit:subspace
 	] .
 
 # CargoShip Plugin
-orbit:cargoship_punch
-	a lv2:Parameter ;
-	rdfs:range atom:Int ;
-	rdfs:label "Punch Mode" ;
-	rdfs:comment "toggle to switch between bar and beat punch modes" ;
-	lv2:minimum 0 ;
-	lv2:maximum 1 ;
-	lv2:scalePoint [ rdfs:label "Beat" ;	rdf:value 0 ] ;
-	lv2:scalePoint [ rdfs:label "Bar" ;		rdf:value 1 ] .
-orbit:cargoship_width
-	a lv2:Parameter ;
-	rdfs:range atom:Int ;
-	rdfs:label "Width" ;
-	rdfs:comment "set to number of beats or bars to loop over" ;
-	lv2:minimum 1 ;
-	lv2:maximum 128 .
 orbit:cargoship_mute
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
 	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
 	rdfs:label "Mute" .
-orbit:cargoship_switch
+orbit:cargoship_record
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
-	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
-	rdfs:label "Switch" .
+	rdfs:comment "toggle to switch to recording mode" ;
+	rdfs:label "Record" .
+orbit:cargoship_memory
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Memory" ;
+	rdfs:comment "reports allocated memory" ;
+	units:unit units:mb ;
+	lv2:minimum 1 ;
+	lv2:maximum 1024 .
 
-orbit:cargoship_play_capacity
-	a lv2:Parameter ;
-	rdfs:range atom:Float ;
-	rdfs:label "Playback Capacity" ;
-	rdfs:comment "shows used fraction of total playback capacity" ;
-	units:unit units:pc ;
-	lv2:minimum 0.0 ;
-	lv2:maximum 100.0 .
-orbit:cargoship_rec_capacity
-	a lv2:Parameter ;
-	rdfs:range atom:Float ;
-	rdfs:label "Recording Capacity" ;
-	rdfs:comment "shows used fraction of total recording capacity" ;
-	units:unit units:pc ;
-	lv2:minimum 0.0 ;
-	lv2:maximum 100.0 .
-orbit:cargoship_position
-	a lv2:Parameter ;
-	rdfs:range atom:Float ;
-	rdfs:label "Position" ;
-	rdfs:comment "shows current position relative to loop width" ;
-	units:unit units:pc ;
-	lv2:minimum 0.0 ;
-	lv2:maximum 100.0 .
+units:mb
+	a units:Unit ;
+	rdfs:label "megabytes" ;
+	units:render "%f MB" ;
+	units:symbol "MB" .
 
 orbit:cargoship
 	a lv2:Plugin ,
@@ -545,9 +518,9 @@ orbit:cargoship
 	doap:name "Orbit CargoShip" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map, state:loadDefaultState ;
+	lv2:requiredFeature urid:map, state:loadDefaultState, work:schedule ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable ;
-	lv2:extensionData	state:interface ;
+	lv2:extensionData	state:interface, work:interface ;
 
 	lv2:port [
 		# sink event port
@@ -577,18 +550,12 @@ orbit:cargoship
 	] ;
 
 	patch:writable
-		orbit:cargoship_punch ,
-		orbit:cargoship_width ,
 		orbit:cargoship_mute ,
-		orbit:cargoship_switch ;
+		orbit:cargoship_record ;
 	patch:readable
-		orbit:cargoship_play_capacity ,
-		orbit:cargoship_rec_capacity ,
-		orbit:cargoship_position ;
+		orbit:cargoship_memory ;
 
 	state:state [
-		orbit:cargoship_punch 1 ;
-		orbit:cargoship_width 4 ;
 		orbit:cargoship_mute false ;
-		orbit:cargoship_switch false ;
+		orbit:cargoship_record true ;
 	] .
