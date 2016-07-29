@@ -44,7 +44,8 @@ add_library(orbit MODULE
 	orbit_pacemaker.c
 	orbit_beatbox.c
 	orbit_subspace.c
-	orbit_cargoship.c)
+	orbit_cargoship.c
+	orbit_quantum.c)
 target_link_libraries(orbit m ${LIBS})
 set_target_properties(orbit PROPERTIES PREFIX "")
 install(TARGETS orbit DESTINATION ${PLUGIN_DEST})

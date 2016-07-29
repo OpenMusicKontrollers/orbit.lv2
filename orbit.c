@@ -39,6 +39,8 @@ lv2_descriptor(uint32_t index)
 			return &orbit_subspace;
 		case 5:
 			return &orbit_cargoship;
+		case 6:
+			return &orbit_quantum;
 		default:
 			return NULL;
 	}
