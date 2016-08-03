@@ -340,7 +340,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	_play(handle, &handle->bar, last_t, nsamples);
 	_play(handle, &handle->beat, last_t, nsamples);
-	timely_advance(&handle->timely, NULL, last_t, nsamples);
+	timely_advance(&handle->timely, NULL, last_t, nsamples-1);
 
 	if(ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);
