@@ -560,6 +560,24 @@ orbit:cargoship
 		orbit:cargoship_record true ;
 	] .
 
+orbit:quantum_mode
+	a lv2:Parameter ;
+	rdfs:label "Mode" ;
+	rdfs:comment "set mode of quantization" ;
+	rdfs:range atom:Int ;
+	lv2:minimum 0 ;
+	lv2:maximum 2 ;
+	lv2:scalePoint [
+		rdfs:label "Floor" ;
+		rdf:value 0 ;
+	] , [
+		rdfs:label "Round" ;
+		rdf:value 1 ;
+	] , [
+		rdfs:label "Ceiling" ;
+		rdf:value 2 ;
+	] .
+
 orbit:quantum
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
@@ -574,9 +592,10 @@ orbit:quantum
 	  a lv2:InputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
-		atom:supports midi:MidiEvent ;
-		atom:supports time:Position ;
-		atom:supports osc:Event ;
+		atom:supports midi:MidiEvent ,
+			time:Position ,
+			osc:Event ,
+			patch:Message ;
 		lv2:index 0 ;
 		lv2:symbol "event_in" ;
 		lv2:name "Event Input" ;
@@ -586,10 +605,18 @@ orbit:quantum
 	  a lv2:OutputPort ,
 			atom:AtomPort ;
 		atom:bufferType atom:Sequence ;
-		atom:supports midi:MidiEvent ;
-		atom:supports osc:Event ;
+		atom:supports midi:MidiEvent ,
+			osc:Event ,
+			patch:Message ;
 		lv2:index 1 ;
 		lv2:symbol "event_out" ;
 		lv2:name "Event Output" ;
 		lv2:designation lv2:control ;
+	] ;
+
+	patch:writable
+		orbit:quantum_mode ;
+
+	state:state [
+		orbit:quantum_mode  2 ;
 	] .

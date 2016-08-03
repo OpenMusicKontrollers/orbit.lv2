@@ -21,9 +21,24 @@
 
 #include <orbit.h>
 #include <timely.h>
+#include <props.h>
 #include <varchunk.h>
 
+#define MAX_NPROPS 1
+
+typedef enum _quantum_mode_t quantum_mode_t;
+typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
+
+struct _plugstate_t {
+	int32_t mode;
+};
+
+enum _quantum_mode_t {
+	MODE_FLOOR = 0,
+	MODE_ROUND = 1,
+	MODE_CEIL  = 2
+};
 
 struct _plughandle_t {
 	LV2_URID_Map *map;
@@ -35,8 +50,19 @@ struct _plughandle_t {
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
 
+	plugstate_t state;
+	plugstate_t stash;
+	PROPS_T(props, MAX_NPROPS);
+
 	varchunk_t *rb;
 	bool rolling;
+};
+
+static const props_def_t stat_mode = {
+	.property = ORBIT_URI"#quantum_mode",
+	.access = LV2_PATCH__writable,
+	.type = LV2_ATOM__Int,
+	.mode = PROP_MODE_STATIC
 };
 
 static void
@@ -47,17 +73,35 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 	if(type == TIMELY_URI_SPEED(timely))
 	{
 		handle->rolling = TIMELY_SPEED(timely) > 0.f ? true : false;
+
+		if(!handle->rolling) // drain ringbuffer at transport stop
+		{
+			size_t size;
+			const LV2_Atom_Event *ev;
+			while( (ev = varchunk_read_request(handle->rb, &size)) )
+			{
+				const LV2_Atom *atom = &ev->body;
+
+				if(handle->ref)
+					handle->ref = lv2_atom_forge_frame_time(&handle->forge, frames);
+				if(handle->ref)
+					handle->ref = lv2_atom_forge_write(&handle->forge, atom, lv2_atom_total_size(atom));
+
+				varchunk_read_advance(handle->rb);
+			}
+		}
 	}
 	else if(type == TIMELY_URI_BAR_BEAT(timely))
 	{
-		const double bar_beat = TIMELY_BAR_BEAT(timely);
+		const double beats = TIMELY_BAR(timely) * TIMELY_BEATS_PER_BAR(timely)
+			+ TIMELY_BAR_BEAT(timely);
 
 		size_t size;
 		const LV2_Atom_Event *ev;
 		while( (ev = varchunk_read_request(handle->rb, &size)) )
 		{
-			if(ev->time.frames > frames)
-				break;
+			if(ev->time.beats > beats)
+				break; // event is for next beat
 
 			const LV2_Atom *atom = &ev->body;
 
@@ -88,8 +132,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	if(!handle->map)
 	{
-		fprintf(stderr,
-			"%s: Host does not support urid:map\n", descriptor->URI);
+		fprintf(stderr, "%s: Host does not support urid:map\n", descriptor->URI);
 		free(handle);
 		return NULL;
 	}
@@ -98,6 +141,20 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		| TIMELY_MASK_BAR_BEAT_WHOLE;
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
+
+	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
+	{
+		fprintf(stderr, "failed to initialize property structure\n");
+		free(handle);
+		return NULL;
+	}
+
+	if(!props_register(&handle->props, &stat_mode, &handle->state.mode, &handle->stash.mode))
+	{
+		fprintf(stderr, "failed to register properties\n");
+		free(handle);
+		return NULL;
+	}
 
 	handle->rb = varchunk_new(0x10000, false); // 64K
 	if(!handle->rb)
@@ -131,6 +188,7 @@ static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
+	timely_t *timely = &handle->timely;
 	uint32_t last_t = 0;
 
 	const uint32_t capacity = handle->event_out->atom.size;
@@ -142,7 +200,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 	{
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 
-		if(!timely_advance(&handle->timely, obj, last_t, ev->time.frames))
+		if(  !timely_advance(timely, obj, last_t, ev->time.frames)
+			&& !props_advance(&handle->props, &handle->forge, ev->time.frames, obj, &handle->ref) )
 		{
 			if(handle->rolling)
 			{
@@ -150,7 +209,24 @@ run(LV2_Handle instance, uint32_t nsamples)
 				LV2_Atom_Event *dst;
 				if( (dst = varchunk_write_request(handle->rb, ev_size)) )
 				{
+					const double beats = TIMELY_BAR(timely) * TIMELY_BEATS_PER_BAR(timely)
+						+ TIMELY_BAR_BEAT(timely);
+
 					memcpy(dst, ev, ev_size);
+					dst->time.beats = beats;
+					switch((quantum_mode_t)handle->state.mode)
+					{
+						case MODE_FLOOR:
+							dst->time.beats = floor(dst->time.beats) + 1.0;
+							break;
+						case MODE_ROUND:
+							dst->time.beats = round(dst->time.beats) + 1.0;
+							break;
+						case MODE_CEIL:
+							dst->time.beats = ceil(dst->time.beats);
+							break;
+					}
+
 					varchunk_write_advance(handle->rb, ev_size);
 				}
 			}
@@ -166,7 +242,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		last_t = ev->time.frames;
 	}
 
-	timely_advance(&handle->timely, NULL, last_t, nsamples);
+	timely_advance(timely, NULL, last_t, nsamples-1);
 
 	if(handle->ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);
@@ -184,6 +260,39 @@ cleanup(LV2_Handle instance)
 	free(handle);
 }
 
+static LV2_State_Status
+_state_save(LV2_Handle instance, LV2_State_Store_Function store,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+}
+
+static LV2_State_Status
+_state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
+	LV2_State_Handle state, uint32_t flags,
+	const LV2_Feature *const *features)
+{
+	plughandle_t *handle = (plughandle_t *)instance;
+
+	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+}
+
+static const LV2_State_Interface state_iface = {
+	.save = _state_save,
+	.restore = _state_restore
+};
+
+static const void *
+extension_data(const char *uri)
+{
+	if(!strcmp(uri, LV2_STATE__interface))
+		return &state_iface;
+	return NULL;
+}
+
 const LV2_Descriptor orbit_quantum = {
 	.URI						= ORBIT_QUANTUM_URI,
 	.instantiate		= instantiate,
@@ -192,5 +301,5 @@ const LV2_Descriptor orbit_quantum = {
 	.run						= run,
 	.deactivate			= NULL,
 	.cleanup				= cleanup,
-	.extension_data	= NULL
+	.extension_data	= extension_data 
 };
