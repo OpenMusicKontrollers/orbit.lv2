@@ -8,7 +8,7 @@ Get more information at: [http://open-music-kontrollers.ch/lv2/orbit](http://ope
 
 ### Build status
 
-[![Build Status](https://travis-ci.org/OpenMusicKontrollers/orbit.lv2.svg)](https://travis-ci.org/OpenMusicKontrollers/orbit.lv2)
+[![build status](https://gitlab.com/OpenMusicKontrollers/orbit.lv2/badges/master/build.svg)](https://gitlab.com/OpenMusicKontrollers/orbit.lv2/commits/master)
 
 ### Dependencies
 
