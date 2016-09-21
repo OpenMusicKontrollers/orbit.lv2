@@ -251,7 +251,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		last_t = ev->time.frames;
 	}
 
-	timely_advance(&handle->timely, NULL, last_t, nsamples-1);
+	timely_advance(&handle->timely, NULL, last_t, nsamples);
 
 	if(handle->ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);

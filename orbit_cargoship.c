@@ -423,7 +423,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 	if(handle->rolling)
 		handle->offset += nsamples - last_t;
-	timely_advance(&handle->timely, NULL, last_t, nsamples-1);
+	timely_advance(&handle->timely, NULL, last_t, nsamples);
 	if(handle->rolling && !handle->state.record && !handle->state.mute)
 		_play(handle, nsamples, capacity);
 
