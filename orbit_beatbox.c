@@ -23,7 +23,7 @@
 #include <timely.h>
 #include <props.h>
 
-#define MAX_NPROPS 6
+#define MAX_NPROPS 8
 
 typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
@@ -35,11 +35,15 @@ struct _plugstate_t {
 	int32_t beat_note;
 	int32_t bar_channel;
 	int32_t beat_channel;
+	int32_t bar_led;
+	int32_t beat_led;
 };
 
 struct _plughandle_t {
 	struct {
 		LV2_URID midi_event;
+		LV2_URID bar_led;
+		LV2_URID beat_led;
 	} urid;
 
 	LV2_URID_Map *map;
@@ -59,6 +63,8 @@ struct _plughandle_t {
 	int32_t beat_channel_old;
 	bool bar_on;
 	bool beat_on;
+	int bar_count;
+	int beat_count;
 
 	PROPS_T(props, MAX_NPROPS);
 	
@@ -183,6 +189,20 @@ static const props_def_t stat_beat_channel = {
 	.event_cb = _beat_intercept
 };
 
+static const props_def_t stat_bar_led = {
+	.property = ORBIT_URI"#beatbox_bar_led",
+	.access = LV2_PATCH__readable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
+static const props_def_t stat_beat_led = {
+	.property = ORBIT_URI"#beatbox_beat_led",
+	.access = LV2_PATCH__readable,
+	.type = LV2_ATOM__Bool,
+	.mode = PROP_MODE_STATIC
+};
+
 static void
 _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 {
@@ -223,6 +243,13 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 			{
 				_note_on(handle, frames, handle->state.beat_channel, handle->state.beat_note);
 				handle->beat_on = true;
+
+				// toggle LED
+				handle->state.beat_led = 1;
+				handle->beat_count = TIMELY_FRAMES_PER_SECOND(&handle->timely) * 60
+					/ TIMELY_BEATS_PER_MINUTE(&handle->timely) / 2;
+				if(handle->ref)
+					props_set(&handle->props, &handle->forge, frames, handle->urid.beat_led, &handle->ref);
 			}
 		}
 	}
@@ -240,6 +267,13 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 			{
 				_note_on(handle, frames, handle->state.bar_channel, handle->state.bar_note);
 				handle->bar_on = true;
+
+				// toggle LED
+				handle->state.bar_led = 1;
+				handle->bar_count = TIMELY_FRAMES_PER_SECOND(&handle->timely) * 60
+					/ TIMELY_BEATS_PER_MINUTE(&handle->timely) / 2;
+				if(handle->ref)
+					props_set(&handle->props, &handle->forge, frames, handle->urid.bar_led, &handle->ref);
 			}
 		}
 	}
@@ -288,7 +322,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		|| !props_register(&handle->props, &stat_bar_note, &handle->state.bar_note, &handle->stash.bar_note)
 		|| !props_register(&handle->props, &stat_beat_note, &handle->state.beat_note, &handle->stash.beat_note)
 		|| !props_register(&handle->props, &stat_bar_channel, &handle->state.bar_channel, &handle->stash.bar_channel)
-		|| !props_register(&handle->props, &stat_beat_channel, &handle->state.beat_channel, &handle->stash.beat_channel) )
+		|| !props_register(&handle->props, &stat_beat_channel, &handle->state.beat_channel, &handle->stash.beat_channel)
+		|| !(handle->urid.bar_led = props_register(&handle->props, &stat_bar_led, &handle->state.bar_led, &handle->stash.bar_led))
+		|| !(handle->urid.beat_led = props_register(&handle->props, &stat_beat_led, &handle->state.beat_led, &handle->stash.beat_led)) )
 	{
 		fprintf(stderr, "failed to register properties\n");
 		free(handle);
@@ -337,6 +373,28 @@ run(LV2_Handle instance, uint32_t nsamples)
 	}
 
 	timely_advance(&handle->timely, NULL, last_t, nsamples);
+
+	if(handle->state.bar_led)
+	{
+		handle->bar_count -= nsamples;
+		if(handle->bar_count < 0)
+		{
+			handle->state.bar_led = 0;
+			if(handle->ref)
+				props_set(&handle->props, &handle->forge, nsamples-1, handle->urid.bar_led, &handle->ref);
+		}
+	}
+
+	if(handle->state.beat_led)
+	{
+		handle->beat_count -= nsamples;
+		if(handle->beat_count < 0)
+		{
+			handle->state.beat_led = 0;
+			if(handle->ref)
+				props_set(&handle->props, &handle->forge, nsamples-1, handle->urid.beat_led, &handle->ref);
+		}
+	}
 
 	if(handle->ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);

@@ -373,6 +373,16 @@ orbit:beatbox_beat_channel
 	rdfs:label "Beat Channel" ;
 	lv2:minimum 0 ;
 	lv2:maximum 15 .
+orbit:beatbox_bar_led
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "blink on bar" ;
+	rdfs:label "Bar LED" .
+orbit:beatbox_beat_led
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "blink on beat" ;
+	rdfs:label "Beat LED" .
 
 orbit:beatbox
 	a lv2:Plugin ,
@@ -407,6 +417,10 @@ orbit:beatbox
 		lv2:name "MIDI Output" ;
 		lv2:designation lv2:control ;
 	] ;
+
+	patch:readable
+		orbit:beatbox_bar_led ,
+		orbit:beatbox_beat_led ;
 
 	patch:writable
 		orbit:beatbox_bar_enabled ,
