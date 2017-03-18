@@ -109,7 +109,7 @@ _bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 {
 	plughandle_t *handle = data;
 
-	if(handle->bar_on)
+	if(handle->bar_on && forge)
 	{
 		_note_off(handle, frames, handle->bar_channel_old, handle->bar_note_old);
 		handle->bar_on = false;
@@ -125,7 +125,7 @@ _beat_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 {
 	plughandle_t *handle = data;
 
-	if(handle->beat_on)
+	if(handle->beat_on && forge)
 	{
 		_note_off(handle, frames, handle->beat_channel_old, handle->beat_note_old);
 		handle->beat_on = false;

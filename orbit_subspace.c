@@ -138,7 +138,7 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 {
 	plughandle_t *handle = data;
 
-	if(handle->ref)
+	if(handle->ref && forge)
 		handle->ref = _position_atomize(handle, forge, frames);
 }
 

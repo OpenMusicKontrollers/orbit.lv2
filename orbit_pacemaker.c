@@ -173,7 +173,7 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 		pos->bar_beat = pos->beats_per_bar - 1.f + frac;
 	}
 
-	if(handle->ref)
+	if(handle->ref && forge)
 		handle->ref = _position_atomize(handle, &handle->forge, frames, pos);
 
 	// update frames_per_beat and frames_per_bar
