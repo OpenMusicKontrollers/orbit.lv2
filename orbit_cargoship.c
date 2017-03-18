@@ -101,25 +101,23 @@ _seq_unlock(plughandle_t *handle)
 	atomic_flag_clear_explicit(&handle->lock, memory_order_release);
 }
 
-static const props_def_t stat_mute = {
-	.property = ORBIT_URI"#cargoship_mute",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_record = {
-	.property = ORBIT_URI"#cargoship_record",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_memory = {
-	.property = ORBIT_URI"#cargoship_memory",
-	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
+static const props_def_t defs [MAX_NPROPS] = {
+	{
+		.property = ORBIT_URI"#cargoship_mute",
+		.offset = offsetof(plugstate_t, mute),
+		.type = LV2_ATOM__Bool,
+	},
+	{
+		.property = ORBIT_URI"#cargoship_record",
+		.offset = offsetof(plugstate_t, record),
+		.type = LV2_ATOM__Bool,
+	},
+	{
+		.property = ORBIT_URI"#cargoship_memory",
+		.offset = offsetof(plugstate_t, memory),
+		.access = LV2_PATCH__readable,
+		.type = LV2_ATOM__Int,
+	}
 };
 
 static inline void
@@ -330,14 +328,13 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  !props_register(&handle->props, &stat_mute, &handle->state.mute, &handle->stash.mute)
-		|| !props_register(&handle->props, &stat_record, &handle->state.record, &handle->stash.record)
-		|| !(handle->urid.memory = props_register(&handle->props, &stat_memory, &handle->state.memory, &handle->stash.memory)) )
+	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
 	{
-		fprintf(stderr, "failed to register properties\n");
 		free(handle);
 		return NULL;
 	}
+
+	handle->urid.memory = props_map(&handle->props, ORBIT_URI"#cargoship_memory");
 
 	return handle;
 }
@@ -471,7 +468,7 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	store(state, handle->forge.Sequence, LV2_ATOM_BODY_CONST(&seq->atom),
 		seq->atom.size, seq->atom.type, flags | LV2_STATE_IS_POD); //TODO check
 
-	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+	return props_save(&handle->props, store, state, flags, features);
 }
 
 static LV2_State_Status
@@ -506,7 +503,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 		memcpy(handle->stash.buf, handle->state.buf, total_size);
 	}
 
-	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+	return props_restore(&handle->props, retrieve, state, flags, features);
 }
 
 static const LV2_State_Interface state_iface = {
@@ -518,11 +515,14 @@ static const LV2_State_Interface state_iface = {
 static LV2_Worker_Status
 _work(LV2_Handle instance,
 	LV2_Worker_Respond_Function respond,
-	LV2_Worker_Respond_Handle target,
+	LV2_Worker_Respond_Handle worker,
 	uint32_t size,
 	const void *body)
 {
 	plughandle_t *handle = instance;
+
+	if(props_work(&handle->props, respond, worker, size, body) == LV2_WORKER_SUCCESS)
+		return LV2_WORKER_SUCCESS; //FIXME
 
 	const job_t *job_in = body;
 	if(job_in->get)
@@ -536,7 +536,7 @@ _work(LV2_Handle instance,
 			}
 		};
 
-		LV2_Worker_Status status = respond(target, sizeof(job_t), &job_out);
+		LV2_Worker_Status status = respond(worker, sizeof(job_t), &job_out);
 	}
 	else
 	{
@@ -554,6 +554,9 @@ static LV2_Worker_Status
 _work_response(LV2_Handle instance, uint32_t size, const void *body)
 {
 	plughandle_t *handle = instance;
+
+	if(props_work_response(&handle->props, size, body) == LV2_WORKER_SUCCESS)
+		return LV2_WORKER_SUCCESS; //FIXME
 
 	const job_t *job_in = body;
 
@@ -588,19 +591,8 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 	}
 	else
 	{
-		// do nothing
+		// nothing
 	}
-
-	return LV2_WORKER_SUCCESS;
-}
-
-// rt-thread
-static LV2_Worker_Status
-_end_run(LV2_Handle instance)
-{
-	plughandle_t *handle = instance;
-
-	// do nothing
 
 	return LV2_WORKER_SUCCESS;
 }
@@ -608,7 +600,7 @@ _end_run(LV2_Handle instance)
 static const LV2_Worker_Interface work_iface = {
 	.work = _work,
 	.work_response = _work_response,
-	.end_run = _end_run
+	.end_run = NULL
 };
 
 static const void *

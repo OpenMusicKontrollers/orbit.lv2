@@ -181,47 +181,40 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 }
 
-static const props_def_t stat_beat_unit = {
-	.property = ORBIT_URI"#pacemaker_beat_unit",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept
-};
-
-static const props_def_t stat_beats_per_bar = {
-	.property = ORBIT_URI"#pacemaker_beats_per_bar",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept
-};
-
-static const props_def_t stat_beats_per_minute = {
-	.property = ORBIT_URI"#pacemaker_beats_per_minute",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept
-};
-
-static const props_def_t stat_rolling = {
-	.property = ORBIT_URI"#pacemaker_rolling",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept
-};
-
-static const props_def_t stat_rewind = {
-	.property = ORBIT_URI"#pacemaker_rewind",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
+static const props_def_t defs [MAX_NPROPS] = {
+	{
+		.property = ORBIT_URI"#pacemaker_beat_unit",
+		.offset = offsetof(plugstate_t, beat_unit),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept
+	},
+	{
+		.property = ORBIT_URI"#pacemaker_beats_per_bar",
+		.offset = offsetof(plugstate_t, beats_per_bar),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept
+	},
+	{
+		.property = ORBIT_URI"#pacemaker_beats_per_minute",
+		.offset = offsetof(plugstate_t, beats_per_minute),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept
+	},
+	{
+		.property = ORBIT_URI"#pacemaker_rolling",
+		.offset = offsetof(plugstate_t, rolling),
+		.type = LV2_ATOM__Bool,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept
+	},
+	{
+		.property = ORBIT_URI"#pacemaker_rewind",
+		.offset = offsetof(plugstate_t, rewind),
+		.type = LV2_ATOM__Bool,
+	}
 };
 
 static LV2_Handle
@@ -278,13 +271,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  !props_register(&handle->props, &stat_beat_unit, &handle->state.beat_unit, &handle->stash.beat_unit)
-		|| !props_register(&handle->props, &stat_beats_per_bar, &handle->state.beats_per_bar, &handle->stash.beats_per_bar)
-		|| !props_register(&handle->props, &stat_beats_per_minute, &handle->state.beats_per_minute, &handle->stash.beats_per_minute)
-		|| !props_register(&handle->props, &stat_rolling, &handle->state.rolling, &handle->stash.rolling)
-		|| !props_register(&handle->props, &stat_rewind, &handle->state.rewind, &handle->stash.rewind) )
+	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
 	{
-		fprintf(stderr, "failed to register properties\n");
 		free(handle);
 		return NULL;
 	}
@@ -395,7 +383,7 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 {
 	plughandle_t *handle = instance;
 
-	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+	return props_save(&handle->props, store, state, flags, features);
 }
 
 static LV2_State_Status
@@ -405,7 +393,7 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 {
 	plughandle_t *handle = instance;
 
-	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+	return props_restore(&handle->props, retrieve, state, flags, features);
 }
 
 static const LV2_State_Interface state_iface = {
@@ -413,11 +401,37 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
-static const void *
-extension_data(const char *uri)
+static inline LV2_Worker_Status
+_work(LV2_Handle instance, LV2_Worker_Respond_Function respond,
+LV2_Worker_Respond_Handle worker, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work(&handle->props, respond, worker, size, body);
+}
+
+static inline LV2_Worker_Status
+_work_response(LV2_Handle instance, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work_response(&handle->props, size, body);
+}
+
+static const LV2_Worker_Interface work_iface = {
+	.work = _work,
+	.work_response = _work_response,
+	.end_run = NULL
+};
+
+static const void*
+extension_data(const char* uri)
 {
 	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
+	else if(!strcmp(uri, LV2_WORKER__interface))
+		return &work_iface;
+
 	return NULL;
 }
 

@@ -135,72 +135,61 @@ _beat_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	handle->beat_channel_old = handle->state.beat_channel;
 }
 
-static const props_def_t stat_bar_enabled = {
-	.property = ORBIT_URI"#beatbox_bar_enabled",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _bar_intercept
-};
-
-static const props_def_t stat_beat_enabled = {
-	.property = ORBIT_URI"#beatbox_beat_enabled",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _beat_intercept
-};
-
-static const props_def_t stat_bar_note = {
-	.property = ORBIT_URI"#beatbox_bar_note",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _bar_intercept
-};
-
-static const props_def_t stat_beat_note = {
-	.property = ORBIT_URI"#beatbox_beat_note",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _beat_intercept
-};
-
-static const props_def_t stat_bar_channel = {
-	.property = ORBIT_URI"#beatbox_bar_channel",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _bar_intercept
-};
-
-static const props_def_t stat_beat_channel = {
-	.property = ORBIT_URI"#beatbox_beat_channel",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _beat_intercept
-};
-
-static const props_def_t stat_bar_led = {
-	.property = ORBIT_URI"#beatbox_bar_led",
-	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_beat_led = {
-	.property = ORBIT_URI"#beatbox_beat_led",
-	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
+static const props_def_t defs [MAX_NPROPS] = {
+	{
+		.property = ORBIT_URI"#beatbox_bar_enabled",
+		.offset = offsetof(plugstate_t, bar_enabled),
+		.type = LV2_ATOM__Bool,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _bar_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_beat_enabled",
+		.offset = offsetof(plugstate_t, beat_enabled),
+		.type = LV2_ATOM__Bool,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _beat_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_bar_note",
+		.offset = offsetof(plugstate_t, bar_note),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _bar_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_beat_note",
+		.offset = offsetof(plugstate_t, beat_note),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _beat_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_bar_channel",
+		.offset = offsetof(plugstate_t, bar_channel),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _bar_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_beat_channel",
+		.offset = offsetof(plugstate_t, beat_channel),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _beat_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_bar_led",
+		.offset = offsetof(plugstate_t, bar_led),
+		.access = LV2_PATCH__readable,
+		.type = LV2_ATOM__Bool,
+	},
+	{
+		.property = ORBIT_URI"#beatbox_beat_led",
+		.offset = offsetof(plugstate_t, beat_led),
+		.access = LV2_PATCH__readable,
+		.type = LV2_ATOM__Bool,
+	}
 };
 
 static void
@@ -317,19 +306,14 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  !props_register(&handle->props, &stat_bar_enabled, &handle->state.bar_enabled, &handle->stash.bar_enabled)
-		|| !props_register(&handle->props, &stat_beat_enabled, &handle->state.beat_enabled, &handle->stash.beat_enabled)
-		|| !props_register(&handle->props, &stat_bar_note, &handle->state.bar_note, &handle->stash.bar_note)
-		|| !props_register(&handle->props, &stat_beat_note, &handle->state.beat_note, &handle->stash.beat_note)
-		|| !props_register(&handle->props, &stat_bar_channel, &handle->state.bar_channel, &handle->stash.bar_channel)
-		|| !props_register(&handle->props, &stat_beat_channel, &handle->state.beat_channel, &handle->stash.beat_channel)
-		|| !(handle->urid.bar_led = props_register(&handle->props, &stat_bar_led, &handle->state.bar_led, &handle->stash.bar_led))
-		|| !(handle->urid.beat_led = props_register(&handle->props, &stat_beat_led, &handle->state.beat_led, &handle->stash.beat_led)) )
+	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
 	{
-		fprintf(stderr, "failed to register properties\n");
 		free(handle);
 		return NULL;
 	}
+
+	handle->urid.bar_led = props_map(&handle->props, ORBIT_URI"#beatbox_bar_led");
+	handle->urid.beat_led = props_map(&handle->props, ORBIT_URI"#beatbox_beat_led");
 
 	return handle;
 }
@@ -416,9 +400,9 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	plughandle_t *handle = (plughandle_t *)instance;
+	plughandle_t *handle = instance;
 
-	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+	return props_save(&handle->props, store, state, flags, features);
 }
 
 static LV2_State_Status
@@ -426,9 +410,9 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	plughandle_t *handle = (plughandle_t *)instance;
+	plughandle_t *handle = instance;
 
-	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+	return props_restore(&handle->props, retrieve, state, flags, features);
 }
 
 static const LV2_State_Interface state_iface = {
@@ -436,11 +420,37 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
-static const void *
-extension_data(const char *uri)
+static inline LV2_Worker_Status
+_work(LV2_Handle instance, LV2_Worker_Respond_Function respond,
+LV2_Worker_Respond_Handle worker, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work(&handle->props, respond, worker, size, body);
+}
+
+static inline LV2_Worker_Status
+_work_response(LV2_Handle instance, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work_response(&handle->props, size, body);
+}
+
+static const LV2_Worker_Interface work_iface = {
+	.work = _work,
+	.work_response = _work_response,
+	.end_run = NULL
+};
+
+static const void*
+extension_data(const char* uri)
 {
 	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
+	else if(!strcmp(uri, LV2_WORKER__interface))
+		return &work_iface;
+
 	return NULL;
 }
 

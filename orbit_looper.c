@@ -100,57 +100,49 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	_window_refresh(handle);
 }
 
-static const props_def_t stat_punch = {
-	.property = ORBIT_URI"#looper_punch",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept
-};
-
-static const props_def_t stat_width = {
-	.property = ORBIT_URI"#looper_width",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept
-};
-
-static const props_def_t stat_mute = {
-	.property = ORBIT_URI"#looper_mute",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_switch = {
-	.property = ORBIT_URI"#looper_switch",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Bool,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_play_capacity = {
-	.property = ORBIT_URI"#looper_play_capacity",
-	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_rec_capacity = {
-	.property = ORBIT_URI"#looper_rec_capacity",
-	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
-};
-
-static const props_def_t stat_position = {
-	.property = ORBIT_URI"#looper_position",
-	.access = LV2_PATCH__readable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC
+static const props_def_t defs [MAX_NPROPS] = {
+	{
+		.property = ORBIT_URI"#looper_punch",
+		.offset = offsetof(plugstate_t, punch),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept
+	},
+	{
+		.property = ORBIT_URI"#looper_width",
+		.offset = offsetof(plugstate_t, width),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept
+	},
+	{
+		.property = ORBIT_URI"#looper_mute",
+		.offset = offsetof(plugstate_t, mute),
+		.type = LV2_ATOM__Bool,
+	},
+	{
+		.property = ORBIT_URI"#looper_switch",
+		.offset = offsetof(plugstate_t, switsch),
+		.type = LV2_ATOM__Bool,
+	},
+	{
+		.property = ORBIT_URI"#looper_play_capacity",
+		.offset = offsetof(plugstate_t, play_capacity),
+		.access = LV2_PATCH__readable,
+		.type = LV2_ATOM__Int,
+	},
+	{
+		.property = ORBIT_URI"#looper_rec_capacity",
+		.offset = offsetof(plugstate_t, rec_capacity),
+		.access = LV2_PATCH__readable,
+		.type = LV2_ATOM__Int,
+	},
+	{
+		.property = ORBIT_URI"#looper_position",
+		.offset = offsetof(plugstate_t, position),
+		.access = LV2_PATCH__readable,
+		.type = LV2_ATOM__Int,
+	}
 };
 
 static inline void
@@ -324,19 +316,15 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  !props_register(&handle->props, &stat_punch, &handle->state.punch, &handle->stash.punch)
-		|| !props_register(&handle->props, &stat_width, &handle->state.width, &handle->stash.width)
-		|| !props_register(&handle->props, &stat_mute, &handle->state.mute, &handle->stash.mute)
-		|| !props_register(&handle->props, &stat_switch, &handle->state.switsch, &handle->stash.switsch)
-
-		|| !(handle->urid.play_capacity = props_register(&handle->props, &stat_play_capacity, &handle->state.play_capacity, &handle->stash.play_capacity))
-		|| !(handle->urid.rec_capacity = props_register(&handle->props, &stat_rec_capacity, &handle->state.rec_capacity, &handle->stash.rec_capacity))
-		|| !(handle->urid.position = props_register(&handle->props, &stat_position, &handle->state.position, &handle->stash.position)) )
+	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
 	{
-		fprintf(stderr, "failed to register properties\n");
 		free(handle);
 		return NULL;
 	}
+
+	handle->urid.play_capacity = props_map(&handle->props, ORBIT_URI"#looper_play_capacity");
+	handle->urid.rec_capacity = props_map(&handle->props, ORBIT_URI"#looper_rec_capacity");
+	handle->urid.position = props_map(&handle->props, ORBIT_URI"#looper_position");
 
 	return handle;
 }
@@ -463,9 +451,9 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	plughandle_t *handle = (plughandle_t *)instance;
+	plughandle_t *handle = instance;
 
-	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+	return props_save(&handle->props, store, state, flags, features);
 }
 
 static LV2_State_Status
@@ -473,9 +461,9 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	plughandle_t *handle = (plughandle_t *)instance;
+	plughandle_t *handle = instance;
 
-	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+	return props_restore(&handle->props, retrieve, state, flags, features);
 }
 
 static const LV2_State_Interface state_iface = {
@@ -483,11 +471,37 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
-static const void *
-extension_data(const char *uri)
+static inline LV2_Worker_Status
+_work(LV2_Handle instance, LV2_Worker_Respond_Function respond,
+LV2_Worker_Respond_Handle worker, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work(&handle->props, respond, worker, size, body);
+}
+
+static inline LV2_Worker_Status
+_work_response(LV2_Handle instance, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work_response(&handle->props, size, body);
+}
+
+static const LV2_Worker_Interface work_iface = {
+	.work = _work,
+	.work_response = _work_response,
+	.end_run = NULL
+};
+
+static const void*
+extension_data(const char* uri)
 {
 	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
+	else if(!strcmp(uri, LV2_WORKER__interface))
+		return &work_iface;
+
 	return NULL;
 }
 

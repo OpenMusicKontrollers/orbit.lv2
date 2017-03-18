@@ -142,23 +142,30 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 		handle->ref = _position_atomize(handle, forge, frames);
 }
 
-static const props_def_t stat_mode = {
-	.property = ORBIT_URI"#subspace_mode",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept
+static const props_def_t defs [MAX_NPROPS] = {
+	{
+		.property = ORBIT_URI"#subspace_mode",
+		.offset = offsetof(plugstate_t, mode),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept
+	},
+	{
+		.property = ORBIT_URI"#subspace_factor",
+		.offset = offsetof(plugstate_t, factor),
+		.type = LV2_ATOM__Int,
+		.event_mask = PROP_EVENT_WRITE,
+		.event_cb = _intercept
+	}
 };
 
-static const props_def_t stat_factor = {
-	.property = ORBIT_URI"#subspace_factor",
-	.access = LV2_PATCH__writable,
-	.type = LV2_ATOM__Int,
-	.mode = PROP_MODE_STATIC,
-	.event_mask = PROP_EVENT_WRITE,
-	.event_cb = _intercept
-};
+static void
+_cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
+{
+	plughandle_t *handle = data;
+
+	// do nothing
+}
 
 static LV2_Handle
 instantiate(const LV2_Descriptor* descriptor, double rate,
@@ -184,7 +191,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	}
 
 	const timely_mask_t mask = 0;
-	timely_init(&handle->timely, handle->map, rate, mask, NULL, NULL);
+	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
 	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
@@ -194,10 +201,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(  !props_register(&handle->props, &stat_mode, &handle->state.mode, &handle->stash.mode)
-		|| !props_register(&handle->props, &stat_factor, &handle->state.factor, &handle->stash.factor) )
+	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
 	{
-		fprintf(stderr, "failed to register properties\n");
 		free(handle);
 		return NULL;
 	}
@@ -273,9 +278,9 @@ _state_save(LV2_Handle instance, LV2_State_Store_Function store,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	plughandle_t *handle = (plughandle_t *)instance;
+	plughandle_t *handle = instance;
 
-	return props_save(&handle->props, &handle->forge, store, state, flags, features);
+	return props_save(&handle->props, store, state, flags, features);
 }
 
 static LV2_State_Status
@@ -283,9 +288,9 @@ _state_restore(LV2_Handle instance, LV2_State_Retrieve_Function retrieve,
 	LV2_State_Handle state, uint32_t flags,
 	const LV2_Feature *const *features)
 {
-	plughandle_t *handle = (plughandle_t *)instance;
+	plughandle_t *handle = instance;
 
-	return props_restore(&handle->props, &handle->forge, retrieve, state, flags, features);
+	return props_restore(&handle->props, retrieve, state, flags, features);
 }
 
 static const LV2_State_Interface state_iface = {
@@ -293,11 +298,37 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
-static const void *
-extension_data(const char *uri)
+static inline LV2_Worker_Status
+_work(LV2_Handle instance, LV2_Worker_Respond_Function respond,
+LV2_Worker_Respond_Handle worker, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work(&handle->props, respond, worker, size, body);
+}
+
+static inline LV2_Worker_Status
+_work_response(LV2_Handle instance, uint32_t size, const void *body)
+{
+	plughandle_t *handle = instance;
+
+	return props_work_response(&handle->props, size, body);
+}
+
+static const LV2_Worker_Interface work_iface = {
+	.work = _work,
+	.work_response = _work_response,
+	.end_run = NULL
+};
+
+static const void*
+extension_data(const char* uri)
 {
 	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
+	else if(!strcmp(uri, LV2_WORKER__interface))
+		return &work_iface;
+
 	return NULL;
 }
 
