@@ -522,7 +522,7 @@ _work(LV2_Handle instance,
 	plughandle_t *handle = instance;
 
 	if(props_work(&handle->props, respond, worker, size, body) == LV2_WORKER_SUCCESS)
-		return LV2_WORKER_SUCCESS; //FIXME
+		return LV2_WORKER_SUCCESS;
 
 	const job_t *job_in = body;
 	if(job_in->get)
@@ -556,7 +556,7 @@ _work_response(LV2_Handle instance, uint32_t size, const void *body)
 	plughandle_t *handle = instance;
 
 	if(props_work_response(&handle->props, size, body) == LV2_WORKER_SUCCESS)
-		return LV2_WORKER_SUCCESS; //FIXME
+		return LV2_WORKER_SUCCESS;
 
 	const job_t *job_in = body;
 
