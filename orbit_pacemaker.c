@@ -63,6 +63,8 @@ struct _plughandle_t {
 		LV2_URID time_frame;
 		LV2_URID time_framesPerSecond;
 		LV2_URID time_speed;
+
+		LV2_URID rolling;
 	} urid;
 
 	LV2_Atom_Forge forge;
@@ -82,8 +84,6 @@ struct _plughandle_t {
 
 	PROPS_T(props, MAX_NPROPS);
 };
-
-static const props_def_t stat_rolling;
 
 static inline LV2_Atom_Forge_Ref
 _position_atomize(plughandle_t *handle, LV2_Atom_Forge *forge, int64_t frames,
@@ -157,7 +157,7 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 	// derive current position as bar_beat
 	pos->bar_beat = handle->rel / handle->frames_per_bar * pos->beats_per_bar;
 
-	if( (impl->def == &stat_rolling) && handle->state.rewind) // start/stop rolling
+	if( (impl->property == handle->urid.rolling) && handle->state.rewind) // start/stop rolling
 	{
 		pos->frame = 0; // reset frame pointer
 		pos->bar = 0; // reset bar
@@ -276,6 +276,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
+	handle->urid.rolling = props_map(&handle->props, ORBIT_URI"#pacemaker_rolling");
 
 	return handle;
 }
