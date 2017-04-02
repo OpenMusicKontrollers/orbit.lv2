@@ -48,10 +48,6 @@ struct _plughandle_t {
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
 
-	float bar_beat;
-	int32_t beat_unit;
-	float beats_per_bar;
-
 	plugstate_t state;
 	plugstate_t stash;
 
