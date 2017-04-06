@@ -85,8 +85,7 @@ _midi2cps(float pitch)
 }
 
 static void
-_bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
-	props_event_t event, props_impl_t *impl)
+_bar_intercept(void *data, int64_t frames, props_impl_t *impl)
 {
 	plughandle_t *handle = data;
 
@@ -103,8 +102,7 @@ _bar_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 }
 
 static void
-_beat_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
-	props_event_t event, props_impl_t *impl)
+_beat_intercept(void *data, int64_t frames, props_impl_t *impl)
 {
 	plughandle_t *handle = data;
 
@@ -135,14 +133,12 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.property = ORBIT_URI"#click_bar_note",
 		.offset = offsetof(plugstate_t, bar_note),
 		.type = LV2_ATOM__Int,
-		.event_mask = PROP_EVENT_WRITE,
 		.event_cb = _bar_intercept
 	},
 	{
 		.property = ORBIT_URI"#click_beat_note",
 		.offset = offsetof(plugstate_t, beat_note),
 		.type = LV2_ATOM__Int,
-		.event_mask = PROP_EVENT_WRITE,
 		.event_cb = _beat_intercept
 	}
 };
@@ -211,15 +207,11 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
-	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
+	if(!props_init(&handle->props, descriptor->URI,
+		defs, MAX_NPROPS, &handle->state, &handle->stash,
+		handle->map, handle))
 	{
 		fprintf(stderr, "failed to initialize property structure\n");
-		free(handle);
-		return NULL;
-	}
-
-	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
-	{
 		free(handle);
 		return NULL;
 	}
@@ -314,6 +306,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
 	LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
 
+	props_idle(&handle->props, &handle->forge, 0, &ref);
+
 	// clear audio output buffer
 	memset(handle->bar.audio, 0x0, sizeof(float)*nsamples);
 
@@ -377,36 +371,11 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
-static inline LV2_Worker_Status
-_work(LV2_Handle instance, LV2_Worker_Respond_Function respond,
-LV2_Worker_Respond_Handle worker, uint32_t size, const void *body)
-{
-	plughandle_t *handle = instance;
-
-	return props_work(&handle->props, respond, worker, size, body);
-}
-
-static inline LV2_Worker_Status
-_work_response(LV2_Handle instance, uint32_t size, const void *body)
-{
-	plughandle_t *handle = instance;
-
-	return props_work_response(&handle->props, size, body);
-}
-
-static const LV2_Worker_Interface work_iface = {
-	.work = _work,
-	.work_response = _work_response,
-	.end_run = NULL
-};
-
 static const void*
 extension_data(const char* uri)
 {
 	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
-	else if(!strcmp(uri, LV2_WORKER__interface))
-		return &work_iface;
 
 	return NULL;
 }

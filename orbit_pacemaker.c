@@ -142,8 +142,7 @@ _position_atomize(plughandle_t *handle, LV2_Atom_Forge *forge, int64_t frames,
 }
 
 static void
-_intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
-	props_event_t event, props_impl_t *impl)
+_intercept(void *data, int64_t frames, props_impl_t *impl)
 {
 	plughandle_t *handle = data;
 	position_t *pos = &handle->pos;
@@ -173,7 +172,7 @@ _intercept(void *data, LV2_Atom_Forge *forge, int64_t frames,
 		pos->bar_beat = pos->beats_per_bar - 1.f + frac;
 	}
 
-	if(handle->ref && forge)
+	if(handle->ref)
 		handle->ref = _position_atomize(handle, &handle->forge, frames, pos);
 
 	// update frames_per_beat and frames_per_bar
@@ -186,28 +185,24 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.property = ORBIT_URI"#pacemaker_beat_unit",
 		.offset = offsetof(plugstate_t, beat_unit),
 		.type = LV2_ATOM__Int,
-		.event_mask = PROP_EVENT_WRITE,
 		.event_cb = _intercept
 	},
 	{
 		.property = ORBIT_URI"#pacemaker_beats_per_bar",
 		.offset = offsetof(plugstate_t, beats_per_bar),
 		.type = LV2_ATOM__Int,
-		.event_mask = PROP_EVENT_WRITE,
 		.event_cb = _intercept
 	},
 	{
 		.property = ORBIT_URI"#pacemaker_beats_per_minute",
 		.offset = offsetof(plugstate_t, beats_per_minute),
 		.type = LV2_ATOM__Int,
-		.event_mask = PROP_EVENT_WRITE,
 		.event_cb = _intercept
 	},
 	{
 		.property = ORBIT_URI"#pacemaker_rolling",
 		.offset = offsetof(plugstate_t, rolling),
 		.type = LV2_ATOM__Bool,
-		.event_mask = PROP_EVENT_WRITE,
 		.event_cb = _intercept
 	},
 	{
@@ -264,15 +259,11 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
-	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
+	if(!props_init(&handle->props, descriptor->URI,
+		defs, MAX_NPROPS, &handle->state, &handle->stash,
+		handle->map, handle))
 	{
 		fprintf(stderr, "failed to initialize property structure\n");
-		free(handle);
-		return NULL;
-	}
-
-	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
-	{
 		free(handle);
 		return NULL;
 	}
@@ -352,6 +343,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
 	handle->ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
 
+	props_idle(&handle->props, &handle->forge, 0, &handle->ref);
+
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
 	{
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
@@ -403,36 +396,11 @@ static const LV2_State_Interface state_iface = {
 	.restore = _state_restore
 };
 
-static inline LV2_Worker_Status
-_work(LV2_Handle instance, LV2_Worker_Respond_Function respond,
-LV2_Worker_Respond_Handle worker, uint32_t size, const void *body)
-{
-	plughandle_t *handle = instance;
-
-	return props_work(&handle->props, respond, worker, size, body);
-}
-
-static inline LV2_Worker_Status
-_work_response(LV2_Handle instance, uint32_t size, const void *body)
-{
-	plughandle_t *handle = instance;
-
-	return props_work_response(&handle->props, size, body);
-}
-
-static const LV2_Worker_Interface work_iface = {
-	.work = _work,
-	.work_response = _work_response,
-	.end_run = NULL
-};
-
 static const void*
 extension_data(const char* uri)
 {
 	if(!strcmp(uri, LV2_STATE__interface))
 		return &state_iface;
-	else if(!strcmp(uri, LV2_WORKER__interface))
-		return &work_iface;
 
 	return NULL;
 }

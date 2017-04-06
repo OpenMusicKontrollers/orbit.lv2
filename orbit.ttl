@@ -112,9 +112,9 @@ orbit:looper
 	doap:name "Orbit Looper" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map, state:loadDefaultState, work:schedule ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData	state:interface, work:interface ;
+	lv2:extensionData	state:interface ;
 
 	lv2:port [
 		# sink event port
@@ -194,9 +194,9 @@ orbit:click
 	doap:name "Orbit Click" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map, state:loadDefaultState, work:schedule ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData	state:interface, work:interface ;
+	lv2:extensionData	state:interface ;
 
 	lv2:port [
 		# sink event port
@@ -290,9 +290,9 @@ orbit:pacemaker
 	doap:name "Orbit Pacemaker" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map, state:loadDefaultState, work:schedule ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData state:interface, work:interface ;
+	lv2:extensionData state:interface ;
 
 	lv2:port [
 		# sink event port
@@ -390,9 +390,9 @@ orbit:beatbox
 	doap:name "Orbit Beatbox" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map, state:loadDefaultState, work:schedule ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData	state:interface, work:interface ;
+	lv2:extensionData	state:interface ;
 
 	lv2:port [
 		# sink event port
@@ -463,9 +463,9 @@ orbit:subspace
 	doap:name "Orbit Subspace" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map, state:loadDefaultState, work:schedule ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData state:interface, work:interface ;
+	lv2:extensionData state:interface ;
 
 	lv2:port [
 		# sink event port
@@ -598,9 +598,9 @@ orbit:quantum
 	doap:name "Orbit Quantum" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map, state:loadDefaultState, work:schedule ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore ;
-	lv2:extensionData state:interface, work:interface ;
+	lv2:extensionData state:interface ;
 
 	lv2:port [
 		# sink event port

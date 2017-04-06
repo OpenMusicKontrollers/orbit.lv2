@@ -321,15 +321,11 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 	lv2_atom_forge_init(&handle->forge, handle->map);
 
-	if(!props_init(&handle->props, MAX_NPROPS, descriptor->URI, handle->map, handle))
+	if(!props_init(&handle->props, descriptor->URI,
+		defs, MAX_NPROPS, &handle->state, &handle->stash,
+		handle->map, handle))
 	{
 		fprintf(stderr, "failed to initialize property structure\n");
-		free(handle);
-		return NULL;
-	}
-
-	if(!props_register(&handle->props, defs, MAX_NPROPS, &handle->state, &handle->stash))
-	{
 		free(handle);
 		return NULL;
 	}
@@ -394,6 +390,8 @@ run(LV2_Handle instance, uint32_t nsamples)
 	LV2_Atom_Forge_Frame frame;
 	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
 	handle->ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
+
+	props_idle(&handle->props, &handle->forge, 0, &handle->ref);
 
 	int64_t last_t = 0;
 	LV2_ATOM_SEQUENCE_FOREACH(handle->event_in, ev)
@@ -521,9 +519,6 @@ _work(LV2_Handle instance,
 {
 	plughandle_t *handle = instance;
 
-	if(props_work(&handle->props, respond, worker, size, body) == LV2_WORKER_SUCCESS)
-		return LV2_WORKER_SUCCESS;
-
 	const job_t *job_in = body;
 	if(job_in->get)
 	{
@@ -554,9 +549,6 @@ static LV2_Worker_Status
 _work_response(LV2_Handle instance, uint32_t size, const void *body)
 {
 	plughandle_t *handle = instance;
-
-	if(props_work_response(&handle->props, size, body) == LV2_WORKER_SUCCESS)
-		return LV2_WORKER_SUCCESS;
 
 	const job_t *job_in = body;
 
