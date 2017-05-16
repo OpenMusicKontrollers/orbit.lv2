@@ -77,7 +77,12 @@ struct _plughandle_t {
 	unsigned play;
 	bool rolling;
 	uint8_t buf [2][BUF_SIZE];
-	LV2_Atom_Event *ev;
+
+	LV2_Atom_Event *play_ev_next;
+	LV2_Atom_Event *play_ev_prev;
+
+	LV2_Atom_Event *rec_ev_next;
+	LV2_Atom_Event *rec_ev_prev;
 };
 
 static inline void
@@ -142,6 +147,11 @@ static const props_def_t defs [MAX_NPROPS] = {
 	}
 };
 
+#define LV2_ATOM_SEQUENCE_FOREACH_FROM(seq, from, iter) \
+	for (LV2_Atom_Event* (iter) = (from); \
+	     !lv2_atom_sequence_is_end(&(seq)->body, (seq)->atom.size, (iter)); \
+	     (iter) = lv2_atom_sequence_next(iter))
+
 static inline void
 _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 {
@@ -149,31 +159,33 @@ _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 
 	const int64_t rel = handle->offset - to; // beginning of current period
 
-	while(handle->ev && !lv2_atom_sequence_is_end(&play_seq->body, play_seq->atom.size, handle->ev))
+	if(handle->play_ev_next)
 	{
-		const int64_t beat_frames = handle->ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
-
-		if(beat_frames >= handle->offset)
-			break; // event not part of this period
-
-		const int64_t frames = beat_frames - rel;
-
-		// check for time jump! skip out-of-order event, as it probably has already been forged...
-		if(frames >= handle->last) //TODO can this be solved more elegantly?
+		LV2_ATOM_SEQUENCE_FOREACH_FROM(play_seq, handle->play_ev_next, ev)
 		{
-			// append event
-			const LV2_Atom *atom = &handle->ev->body;
-			if(handle->ref)
-				handle->ref = lv2_atom_forge_frame_time(&handle->forge, frames);
-			if(handle->ref)
-				handle->ref = lv2_atom_forge_raw(&handle->forge, atom, lv2_atom_total_size(atom));
-			if(handle->ref)
-				lv2_atom_forge_pad(&handle->forge, atom->size);
+			const int64_t beat_frames = ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
 
-			handle->last = frames; // advance frame time head
+			if(beat_frames >= handle->offset)
+				break; // event not part of this period
+
+			const int64_t frames = beat_frames - rel;
+
+			// check for time jump! skip out-of-order event, as it probably has already been forged...
+			if(frames >= handle->last) //TODO can this be solved more elegantly?
+			{
+				// append event
+				const LV2_Atom *atom = &ev->body;
+				if(handle->ref)
+					handle->ref = lv2_atom_forge_frame_time(&handle->forge, frames);
+				if(handle->ref)
+					handle->ref = lv2_atom_forge_write(&handle->forge, atom, lv2_atom_total_size(atom));
+
+				handle->last = frames; // advance frame time head
+			}
+
+			handle->play_ev_prev = ev;
+			handle->play_ev_next = lv2_atom_sequence_next(ev);
 		}
-
-		handle->ev = lv2_atom_sequence_next(handle->ev);
 	}
 }
 
@@ -186,6 +198,9 @@ _rec(plughandle_t *handle, const LV2_Atom_Event *ev)
 	if(e)
 	{
 		e->time.beats = handle->offset / TIMELY_FRAMES_PER_BEAT(&handle->timely);
+
+		handle->rec_ev_prev = handle->rec_ev_next;
+		handle->rec_ev_next = e;
 	}
 	else
 	{
@@ -197,38 +212,72 @@ static inline void
 _reposition_play(plughandle_t *handle)
 {
 	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
+	LV2_Atom_Event *from = lv2_atom_sequence_begin(&play_seq->body);
 
-	LV2_ATOM_SEQUENCE_FOREACH(play_seq, ev)
+	if(handle->play_ev_prev && handle->play_ev_next)
+	{
+		const int64_t beat_frames = handle->play_ev_prev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
+
+		if(beat_frames < handle->offset)
+			from = handle->play_ev_prev; // search from here, not beginning
+		else
+			printf("play not positioned\n");
+	}
+
+	LV2_ATOM_SEQUENCE_FOREACH_FROM(play_seq, from, ev)
 	{
 		const int64_t beat_frames = ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
 
 		if(beat_frames >= handle->offset)
 		{
 			// reposition here
-			handle->ev = ev;
+			handle->play_ev_prev = handle->play_ev_next;
+			handle->play_ev_next = ev;
+
 			return;
 		}
 	}
 
-	handle->ev = NULL;
+	printf("play null\n");
+	handle->play_ev_prev = NULL;
+	handle->play_ev_next = NULL;
 }
 
 static inline void
 _reposition_rec(plughandle_t *handle)
 {
 	LV2_Atom_Sequence *rec_seq = (LV2_Atom_Sequence *)handle->buf[!handle->play];
+	LV2_Atom_Event *from = lv2_atom_sequence_begin(&rec_seq->body);
 
-	LV2_ATOM_SEQUENCE_FOREACH(rec_seq, ev)
+	if(handle->rec_ev_prev && handle->rec_ev_next)
+	{
+		const int64_t beat_frames = handle->rec_ev_prev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
+
+		if(beat_frames < handle->offset)
+			from = handle->rec_ev_prev; // search from here, not beginning
+		else
+			printf("rec not positioned\n");
+	}
+
+	LV2_ATOM_SEQUENCE_FOREACH_FROM(rec_seq, from, ev)
 	{
 		const int64_t beat_frames = ev->time.beats * TIMELY_FRAMES_PER_BEAT(&handle->timely);
 
 		if(beat_frames >= handle->offset)
 		{
+			handle->rec_ev_prev = handle->rec_ev_next; //FIXME check
+			handle->rec_ev_next = ev; //FIXME check
+
 			// truncate sequence here
 			rec_seq->atom.size = (uintptr_t)ev - (uintptr_t)&rec_seq->body;
+
 			return;
 		}
 	}
+
+	printf("rec null\n");
+	handle->rec_ev_prev = NULL;
+	handle->rec_ev_next = NULL;
 }
 
 static void
