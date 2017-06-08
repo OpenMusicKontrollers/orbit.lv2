@@ -23,7 +23,7 @@
 #include <timely.h>
 #include <props.h>
 
-#define MAX_NPROPS 8
+#define MAX_NPROPS 10
 
 typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
@@ -33,6 +33,8 @@ struct _plugstate_t {
 	int32_t beat_enabled;
 	int32_t bar_note;
 	int32_t beat_note;
+	int32_t bar_vel;
+	int32_t beat_vel;
 	int32_t bar_channel;
 	int32_t beat_channel;
 	int32_t bar_led;
@@ -73,9 +75,9 @@ struct _plughandle_t {
 };
 
 static inline void
-_note(plughandle_t *handle, uint8_t frames, uint8_t cmd, uint8_t channel, uint8_t note)
+_note(plughandle_t *handle, uint8_t frames, uint8_t cmd, uint8_t channel, uint8_t note, uint8_t vel)
 {
-	const uint8_t midi [3] = {cmd | channel, note, 0x7f};
+	const uint8_t midi [3] = {cmd | channel, note, vel};
 
 	LV2_Atom_Forge_Ref ref = handle->ref;
 
@@ -92,15 +94,15 @@ _note(plughandle_t *handle, uint8_t frames, uint8_t cmd, uint8_t channel, uint8_
 }
 
 static inline void
-_note_on(plughandle_t *handle, int64_t frames, uint8_t channel, uint8_t note)
+_note_on(plughandle_t *handle, int64_t frames, uint8_t channel, uint8_t note, uint8_t vel)
 {
-	_note(handle, frames, LV2_MIDI_MSG_NOTE_ON, channel, note);
+	_note(handle, frames, LV2_MIDI_MSG_NOTE_ON, channel, note, vel);
 }
 
 static inline void
 _note_off(plughandle_t *handle, int64_t frames, uint8_t channel, uint8_t note)
 {
-	_note(handle, frames, LV2_MIDI_MSG_NOTE_OFF, channel , note);
+	_note(handle, frames, LV2_MIDI_MSG_NOTE_OFF, channel , note, 0x0);
 }
 
 static void
@@ -157,6 +159,16 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.offset = offsetof(plugstate_t, beat_note),
 		.type = LV2_ATOM__Int,
 		.event_cb = _beat_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_bar_velocity",
+		.offset = offsetof(plugstate_t, bar_vel),
+		.type = LV2_ATOM__Int
+	},
+	{
+		.property = ORBIT_URI"#beatbox_beat_velocity",
+		.offset = offsetof(plugstate_t, beat_vel),
+		.type = LV2_ATOM__Int
 	},
 	{
 		.property = ORBIT_URI"#beatbox_bar_channel",
@@ -222,7 +234,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 
 			if(handle->state.beat_enabled && (handle->state.bar_enabled ? !is_bar_start : true))
 			{
-				_note_on(handle, frames, handle->state.beat_channel, handle->state.beat_note);
+				_note_on(handle, frames, handle->state.beat_channel, handle->state.beat_note, handle->state.beat_vel);
 				handle->beat_on = true;
 
 				// toggle LED
@@ -246,7 +258,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 
 			if(handle->state.bar_enabled)
 			{
-				_note_on(handle, frames, handle->state.bar_channel, handle->state.bar_note);
+				_note_on(handle, frames, handle->state.bar_channel, handle->state.bar_note, handle->state.bar_vel);
 				handle->bar_on = true;
 
 				// toggle LED

@@ -359,6 +359,21 @@ orbit:beatbox_beat_note
 	units:unit units:midiNote ;
 	lv2:minimum 0 ;
 	lv2:maximum 127 .
+orbit:beatbox_bar_velocity
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Bar Velocity" ;
+	rdfs:comment "set MIDI velocity for bars" ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
+orbit:beatbox_beat_velocity
+	a lv2:Parameter ;
+	rdfs:range atom:Int ;
+	rdfs:label "Beat Velocity" ;
+	rdfs:comment "set MIDI velocity for beats" ;
+	units:unit units:midiNote ;
+	lv2:minimum 0 ;
+	lv2:maximum 127 .
 orbit:beatbox_bar_channel
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
@@ -427,14 +442,18 @@ orbit:beatbox
 		orbit:beatbox_beat_enabled ,
 		orbit:beatbox_bar_note ,
 		orbit:beatbox_beat_note ,
+		orbit:beatbox_bar_velocity ,
+		orbit:beatbox_beat_velocity ,
 		orbit:beatbox_bar_channel ,
 		orbit:beatbox_beat_channel ;
 
 	state:state [
 		orbit:beatbox_bar_enabled true ;
 		orbit:beatbox_beat_enabled true ;
-		orbit:beatbox_bar_note 72 ;
-		orbit:beatbox_beat_note 60 ;
+		orbit:beatbox_bar_note 36 ;
+		orbit:beatbox_beat_note 37 ;
+		orbit:beatbox_bar_velocity 64 ;
+		orbit:beatbox_beat_velocity 64 ;
 		orbit:beatbox_bar_channel 0 ;
 		orbit:beatbox_beat_channel 0 ;
 	] .
