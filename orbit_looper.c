@@ -221,7 +221,7 @@ _reposition_play(plughandle_t *handle)
 		if(beat_frames < handle->offset)
 			from = handle->play_ev_prev; // search from here, not beginning
 		else
-			printf("play not positioned\n");
+			;//printf("play not positioned\n");
 	}
 
 	LV2_ATOM_SEQUENCE_FOREACH_FROM(play_seq, from, ev)
@@ -238,7 +238,7 @@ _reposition_play(plughandle_t *handle)
 		}
 	}
 
-	printf("play null\n");
+	//printf("play null\n");
 	handle->play_ev_prev = NULL;
 	handle->play_ev_next = NULL;
 }
@@ -256,7 +256,7 @@ _reposition_rec(plughandle_t *handle)
 		if(beat_frames < handle->offset)
 			from = handle->rec_ev_prev; // search from here, not beginning
 		else
-			printf("rec not positioned\n");
+			;//printf("rec not positioned\n");
 	}
 
 	LV2_ATOM_SEQUENCE_FOREACH_FROM(rec_seq, from, ev)
@@ -275,7 +275,7 @@ _reposition_rec(plughandle_t *handle)
 		}
 	}
 
-	printf("rec null\n");
+	//printf("rec null\n");
 	handle->rec_ev_prev = NULL;
 	handle->rec_ev_next = NULL;
 }
