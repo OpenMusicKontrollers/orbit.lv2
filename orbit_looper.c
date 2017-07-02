@@ -76,6 +76,7 @@ struct _plughandle_t {
 
 	unsigned play;
 	bool rolling;
+	bool mute;
 	uint8_t buf [2][BUF_SIZE];
 
 	LV2_Atom_Event *play_ev_next;
@@ -300,8 +301,13 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 			handle->offset = fmod(beats, handle->state.width * TIMELY_BEATS_PER_BAR(timely))
 				* TIMELY_FRAMES_PER_BEAT(timely);
 
-		if(handle->state.switsch && (handle->offset == 0) )
-			handle->play ^= 1;
+		if(handle->offset == 0)
+		{
+			if(handle->state.switsch)
+				handle->play ^= 1;
+
+			handle->mute = handle->state.mute;
+		}
 
 		if(beats == 0.0) // clear sequence buffers when transport is rewound
 		{
@@ -396,6 +402,7 @@ activate(LV2_Handle instance)
 
 	handle->offset = 0.f;
 	handle->play = 0;
+	handle->mute = false;
 	handle->rolling = false;
 
 	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
@@ -440,7 +447,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		if(!handled && handle->rolling)
 			_rec(handle, ev); // dont' record time position signals and patch messages
 	
-		if(!handle->state.mute && handle->rolling)
+		if(!handle->mute && handle->rolling)
 			_play(handle, ev->time.frames, capacity);
 
 		last_t = ev->time.frames;
@@ -449,7 +456,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	if(handle->rolling)
 		handle->offset += nsamples - last_t;
 	timely_advance(&handle->timely, NULL, last_t, nsamples);
-	if(!handle->state.mute && handle->rolling)
+	if(!handle->mute && handle->rolling)
 		_play(handle, nsamples, capacity);
 
 	LV2_Atom_Sequence *play_seq = (LV2_Atom_Sequence *)handle->buf[handle->play];
