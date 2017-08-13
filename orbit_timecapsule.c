@@ -44,11 +44,11 @@ struct _item_t {
 } __attribute__((packed));
 
 enum _job_type_t {
-	JOB_DRAIN,
-	JOB_REPOSITION_PLAY,
-	JOB_READ,
-	JOB_REPOSITION_REC,
-	JOB_WRITE
+	TC_JOB_DRAIN,
+	TC_JOB_REPOSITION_PLAY,
+	TC_JOB_READ,
+	TC_JOB_REPOSITION_REC,
+	TC_JOB_WRITE
 };
 
 struct _job_t {
@@ -123,7 +123,7 @@ _request_read(plughandle_t *handle)
 	job_t *job;
 	if((job = varchunk_write_request(handle->to_worker, tot_size)))
 	{
-		job->type = JOB_READ;
+		job->type = TC_JOB_READ;
 
 		varchunk_write_advance(handle->to_worker, tot_size);
 		_wakeup(handle);
@@ -142,7 +142,7 @@ _reposition_play(plughandle_t *handle, double beats)
 	job_t *job;
 	if((job = varchunk_write_request(handle->to_worker, tot_size)))
 	{
-		job->type = JOB_REPOSITION_PLAY;
+		job->type = TC_JOB_REPOSITION_PLAY;
 		job->beats = beats;
 
 		varchunk_write_advance(handle->to_worker, tot_size);
@@ -163,7 +163,7 @@ _reposition_rec(plughandle_t *handle, double beats)
 	job_t *job;
 	if((job = varchunk_write_request(handle->to_worker, tot_size)))
 	{
-		job->type = JOB_REPOSITION_REC;
+		job->type = TC_JOB_REPOSITION_REC;
 		job->beats = beats;
 
 		varchunk_write_advance(handle->to_worker, tot_size);
@@ -218,7 +218,7 @@ _play(plughandle_t *handle, int64_t to)
 	{
 		switch(job->type)
 		{
-			case JOB_WRITE:
+			case TC_JOB_WRITE:
 			{
 				if(handle->draining)
 					break; // ignore while draining
@@ -240,15 +240,15 @@ _play(plughandle_t *handle, int64_t to)
 					handle->ref = lv2_atom_forge_write(&handle->forge, job->atom, lv2_atom_total_size(job->atom));
 			} break;
 
-			case JOB_DRAIN:
+			case TC_JOB_DRAIN:
 			{
 				if(handle->draining)
 					handle->draining = false;
 			} break;
 
-			case JOB_REPOSITION_PLAY:
-			case JOB_READ:
-			case JOB_REPOSITION_REC:
+			case TC_JOB_REPOSITION_PLAY:
+			case TC_JOB_READ:
+			case TC_JOB_REPOSITION_REC:
 				break;
 		}
 
@@ -274,7 +274,7 @@ _rec(plughandle_t *handle, const LV2_Atom_Event *ev)
 	job_t *job;
 	if((job = varchunk_write_request(handle->to_worker, tot_size)))
 	{
-		job->type = JOB_WRITE;
+		job->type = TC_JOB_WRITE;
 		job->beats = handle->offset / TIMELY_FRAMES_PER_BEAT(&handle->timely);
 		memcpy(job->atom, atom, atom_size);
 
@@ -313,7 +313,7 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 }
 
 static inline void
-_close(plughandle_t *handle)
+_close_disk(plughandle_t *handle)
 {
 	if(handle->gzfile)
 	{
@@ -350,9 +350,9 @@ _read_header(plughandle_t *handle, double *beats, uint32_t *size)
 }
 
 static inline void
-_reopen(plughandle_t *handle, bool writing, double beats)
+_reopen_disk(plughandle_t *handle, bool writing, double beats)
 {
-	_close(handle);
+	_close_disk(handle);
 
 	z_off_t offset = 0;
 
@@ -386,7 +386,7 @@ _reopen(plughandle_t *handle, bool writing, double beats)
 			offset = gztell(handle->gzfile);
 		}
 
-		_close(handle);
+		_close_disk(handle);
 	}
 
 	handle->gzfile = gzopen(handle->path, writing ? writing_mode : reading_mode);
@@ -460,7 +460,7 @@ _read_from(plughandle_t *handle)
 	const uint32_t tot_size = sizeof(job_t) + tx_size;
 	if((job = varchunk_write_request(handle->to_dsp, tot_size)))
 	{
-		job->type = JOB_WRITE;
+		job->type = TC_JOB_WRITE;
 		job->beats = beats;
 
 		if(gzfread(job->atom, tx_size, 1, handle->gzfile) != 1)
@@ -682,7 +682,7 @@ cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
 
-	_close(handle);
+	_close_disk(handle);
 
 	if(handle->to_dsp)
 		varchunk_free(handle->to_dsp);
@@ -742,15 +742,15 @@ _work(LV2_Handle instance,
 	{
 		switch(job->type)
 		{
-			case JOB_REPOSITION_PLAY:
+			case TC_JOB_REPOSITION_PLAY:
 			{
-				_reopen(handle, false, job->beats);
+				_reopen_disk(handle, false, job->beats);
 
 				// send drain
 				job_t *job2;
 				if((job2 = varchunk_write_request(handle->to_dsp, sizeof(job_t))))
 				{
-					job2->type = JOB_DRAIN;
+					job2->type = TC_JOB_DRAIN;
 
 					varchunk_write_advance(handle->to_dsp, sizeof(job_t));
 				}
@@ -759,21 +759,21 @@ _work(LV2_Handle instance,
 					lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", "_work");
 				}
 			} // fall-through
-			case JOB_READ:
+			case TC_JOB_READ:
 			{
 				while(_read_from(handle) == 0)
 					;
 			} break;
 
-			case JOB_REPOSITION_REC:
+			case TC_JOB_REPOSITION_REC:
 			{
-				_reopen(handle, true, job->beats);
+				_reopen_disk(handle, true, job->beats);
 
 				// send drain
 				job_t *job2;
 				if((job2 = varchunk_write_request(handle->to_dsp, sizeof(job_t))))
 				{
-					job2->type = JOB_DRAIN;
+					job2->type = TC_JOB_DRAIN;
 
 					varchunk_write_advance(handle->to_dsp, sizeof(job_t));
 				}
@@ -783,12 +783,12 @@ _work(LV2_Handle instance,
 				}
 			} break;
 
-			case JOB_WRITE:
+			case TC_JOB_WRITE:
 			{
 				_write_to(handle, job->beats, job->atom);
 			} break;
 
-			case JOB_DRAIN:
+			case TC_JOB_DRAIN:
 			{
 				// nothing to do
 			}	break;
