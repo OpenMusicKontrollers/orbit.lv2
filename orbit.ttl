@@ -28,6 +28,7 @@
 @prefix work:			<http://lv2plug.in/ns/ext/worker#> .
 @prefix state:		<http://lv2plug.in/ns/ext/state#> .
 @prefix patch:		<http://lv2plug.in/ns/ext/patch#> .
+@prefix log:			<http://lv2plug.in/ns/ext/log#> .
 
 @prefix osc:			<http://open-music-kontrollers.ch/lv2/osc#> .
 @prefix lic:			<http://opensource.org/licenses/> .
@@ -618,7 +619,7 @@ orbit:timecapsule
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, urid:unmap, state:makePath, state:loadDefaultState, work:schedule ;
-	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore ;
+	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
 	lv2:extensionData	state:interface, work:interface ;
 
 	lv2:port [

@@ -61,7 +61,6 @@ struct _plugstate_t {
 	int32_t mute;
 	int32_t record;
 	int32_t memory;
-	uint8_t *buf;
 };
 
 struct _plughandle_t {
@@ -69,6 +68,9 @@ struct _plughandle_t {
 	LV2_URID_Unmap *unmap;
 	LV2_Atom_Forge forge;
 	LV2_Atom_Forge_Ref ref;
+
+	LV2_Log_Log *log;
+	LV2_Log_Logger logger;
 	
 	timely_t timely;
 
@@ -79,7 +81,6 @@ struct _plughandle_t {
 	LV2_Atom_Sequence *event_out;
 
 	int64_t offset;
-	int64_t last;
 
 	PROPS_T(props, MAX_NPROPS);
 
@@ -88,7 +89,7 @@ struct _plughandle_t {
 	LV2_Worker_Schedule *sched;
 
 	netatom_t *netatom;
-	varchunk_t *from_worker;
+	varchunk_t *to_dsp;
 	varchunk_t *to_worker;
 
 	char *path;
@@ -96,7 +97,10 @@ struct _plughandle_t {
 	bool draining;
 };
 
-static const char magic [MAGIC_SIZE] = "netatom";
+static const char magic [MAGIC_SIZE] = "netatom"; //FIXME use
+
+static const char *reading_mode = "rb";
+static const char *writing_mode = "wb9";
 
 static inline void
 _wakeup(plughandle_t *handle)
@@ -104,8 +108,11 @@ _wakeup(plughandle_t *handle)
 	const int32_t dummy = 0;
 
 	const LV2_Worker_Status status = handle->sched->schedule_work(
-		handle->sched->handle, sizeof(int32_t), &dummy); //FIXME check
-	(void)status;
+		handle->sched->handle, sizeof(int32_t), &dummy);
+	if( (status != LV2_WORKER_SUCCESS) && handle->log)
+	{
+		lv2_log_trace(&handle->logger, "%s: work:schedule failed\n", "_wakeup");
+	}
 }
 
 static inline void
@@ -117,10 +124,13 @@ _request_read(plughandle_t *handle)
 	if((job = varchunk_write_request(handle->to_worker, tot_size)))
 	{
 		job->type = JOB_READ;
-		job->beats = 0.0;
 
 		varchunk_write_advance(handle->to_worker, tot_size);
 		_wakeup(handle);
+	}
+	else if(handle->log)
+	{
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", "_request_read");
 	}
 }
 
@@ -139,6 +149,10 @@ _reposition_play(plughandle_t *handle, double beats)
 		_wakeup(handle);
 		handle->draining = true;
 	}
+	else if(handle->log)
+	{
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", "_reposition_play");
+	}
 }
 
 static inline void
@@ -156,6 +170,10 @@ _reposition_rec(plughandle_t *handle, double beats)
 		_wakeup(handle);
 		handle->draining = true;
 	}
+	else if(handle->log)
+	{
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", "_reposition_rec");
+	}
 }
 
 static void
@@ -163,10 +181,14 @@ _record_intercept(void *data, int64_t frames, props_impl_t *impl)
 {
 	plughandle_t *handle = data;
 
+	const double beats = handle->offset / TIMELY_FRAMES_PER_BEAT(&handle->timely);
+	if(!isfinite(beats))
+		return;
+
 	if(handle->state.record)
-		_reposition_rec(handle, 0.0); //FIXME
+		_reposition_rec(handle, beats);
 	else
-		_reposition_play(handle, 0.0); //FIXME
+		_reposition_play(handle, beats);
 }
 
 static const props_def_t defs [MAX_NPROPS] = {
@@ -192,7 +214,7 @@ _play(plughandle_t *handle, int64_t to)
 
 	const job_t *job;
 	size_t tot_size;
-	while((job = varchunk_read_request(handle->from_worker, &tot_size)))
+	while((job = varchunk_read_request(handle->to_dsp, &tot_size)))
 	{
 		switch(job->type)
 		{
@@ -230,7 +252,7 @@ _play(plughandle_t *handle, int64_t to)
 				break;
 		}
 
-		varchunk_read_advance(handle->from_worker);
+		varchunk_read_advance(handle->to_dsp);
 		consumed = true;
 		continue;
 
@@ -259,6 +281,10 @@ _rec(plughandle_t *handle, const LV2_Atom_Event *ev)
 		varchunk_write_advance(handle->to_worker, tot_size);
 		_wakeup(handle);
 	}
+	else if(handle->log)
+	{
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", "_rec");
+	}
 }
 
 static void
@@ -274,15 +300,15 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 	{
 		const double beats = (double)TIMELY_BAR(timely) * TIMELY_BEATS_PER_BAR(timely)
 			+ TIMELY_BAR_BEAT(timely);
+		if(!isfinite(beats))
+			return;
 
 		handle->offset = beats * TIMELY_FRAMES_PER_BEAT(timely);
 
-#if 0
 		if(handle->state.record)
 			_reposition_rec(handle, beats);
 		else
 			_reposition_play(handle, beats);
-#endif
 	}
 }
 
@@ -296,19 +322,94 @@ _close(plughandle_t *handle)
 	}
 }
 
-static inline void
-_reopen(plughandle_t *handle, const char *mode)
+static inline int
+_read_header(plughandle_t *handle, double *beats, uint32_t *size)
 {
-	printf("_reopen: %s\n", mode);
+	item_t itm;
+
+	if(gzfread(&itm, sizeof(item_t), 1, handle->gzfile) != 1)
+	{
+		int errnum;
+		const char *err = gzerror(handle->gzfile, &errnum);
+		if( (errnum != Z_OK) && handle->log)
+		{
+			lv2_log_error(&handle->logger, "%s: gzfread failed: %s\n", "_read_header", err);
+		}
+		return -1;
+	}
+
+	itm.beats.u = be64toh(itm.beats.u);
+	itm.size = be32toh(itm.size);
+
+	if(beats)
+		*beats = itm.beats.d;
+	if(size)
+		*size = itm.size;
+
+	return 0;
+}
+
+static inline void
+_reopen(plughandle_t *handle, bool writing, double beats)
+{
 	_close(handle);
 
-	handle->gzfile = gzopen(handle->path, mode);
+	z_off_t offset = 0;
+
+	if(beats > 0.0)
+	{
+		handle->gzfile = gzopen(handle->path, reading_mode);
+		if(!handle->gzfile && handle->log)
+		{
+			lv2_log_error(&handle->logger, "%s: gzopen failed\n", "_reopen");
+			return;
+		}
+
+		double _beats;
+		uint32_t _size;
+		while(_read_header(handle, &_beats, &_size) == 0)
+		{
+			if(_beats >= beats) // found point of interest
+			{
+				break;
+			}
+			else
+			{
+				const int res = gzseek(handle->gzfile, _size, SEEK_CUR); // skip item payload
+				if( (res == -1) && handle->log)
+				{
+					lv2_log_error(&handle->logger, "%s: gzseek failed\n", "_reopen");
+					break;
+				}
+			}
+
+			offset = gztell(handle->gzfile);
+		}
+
+		_close(handle);
+	}
+
+	handle->gzfile = gzopen(handle->path, writing ? writing_mode : reading_mode);
+	if(!handle->gzfile && handle->log)
+	{
+		lv2_log_error(&handle->logger, "%s: gzopen failed\n", "_reopen");
+		return;
+	}
+
+	if(offset > 0)
+	{
+		const int res = gzseek(handle->gzfile, offset, SEEK_SET);
+		if( (res == -1) && handle->log)
+		{
+			lv2_log_error(&handle->logger, "%s: gzseek failed\n", "_reopen");
+		}
+	}
 }
 
 static inline int
 _write(plughandle_t *handle, double beats, const LV2_Atom *atom)
 {
-	printf("_write\n");
+	//printf("_write\n");
 	if(!handle->gzfile)
 		return -1;
 
@@ -323,10 +424,21 @@ _write(plughandle_t *handle, double beats, const LV2_Atom *atom)
 		itm.beats.u = htobe64(itm.beats.u);
 		itm.size = htobe32(itm.size);
 
-		gzfwrite(&itm, sizeof(item_t), 1, handle->gzfile);	 //FIXME check
-		gzfwrite(rx_body, rx_size, 1, handle->gzfile); //FIXME check
+		const int written = gzfwrite(&itm, sizeof(item_t), 1, handle->gzfile)
+			+ gzfwrite(rx_body, rx_size, 1, handle->gzfile);
+
+		if( (written != 2) && handle->log)
+		{
+			int errnum;
+			const char *err = gzerror(handle->gzfile, &errnum);
+			lv2_log_error(&handle->logger, "%s: gsfwrite failed: %s\n", "_write", err);
+		}
 
 		return 0;
+	}
+	else if(handle->log)
+	{
+		lv2_log_error(&handle->logger, "%s: netatom_serialize failed\n", "_write");
 	}
 
 	return -1;
@@ -335,27 +447,32 @@ _write(plughandle_t *handle, double beats, const LV2_Atom *atom)
 static inline int
 _read(plughandle_t *handle)
 {
-	printf("_read\n");
+	//printf("_read\n");
 	if(!handle->gzfile)
 		return -1;
 
-	item_t itm;
-	if(gzfread(&itm, sizeof(item_t), 1, handle->gzfile) != 1)
+	double beats;
+	uint32_t tx_size;
+	if(_read_header(handle, &beats, &tx_size) != 0)
 		return -1;
-	itm.beats.u = be64toh(itm.beats.u);
-	itm.size = be32toh(itm.size);
-
-	const uint32_t tx_size = itm.size;
 
 	job_t *job;
 	const uint32_t tot_size = sizeof(job_t) + tx_size;
-	if((job = varchunk_write_request(handle->from_worker, tot_size)))
+	if((job = varchunk_write_request(handle->to_dsp, tot_size)))
 	{
 		job->type = JOB_WRITE;
-		job->beats = itm.beats.d;
+		job->beats = beats;
 
 		if(gzfread(job->atom, tx_size, 1, handle->gzfile) != 1)
+		{
+			int errnum;
+			const char *err = gzerror(handle->gzfile, &errnum);
+			if( (errnum != Z_OK) && handle->log)
+			{
+				lv2_log_error(&handle->logger, "%s: gzfread failed: %s\n", "_read", err);
+			}
 			return -1;
+		}
 
 		const LV2_Atom *atom = netatom_deserialize(handle->netatom, (const uint8_t *)job->atom, tx_size);
 		if(atom)
@@ -363,9 +480,17 @@ _read(plughandle_t *handle)
 			const uint32_t atom_size = lv2_atom_total_size(atom);
 			memcpy(job->atom, atom, atom_size);
 
-			varchunk_write_advance(handle->from_worker, atom_size);
+			varchunk_write_advance(handle->to_dsp, sizeof(job_t) + atom_size);
 			return 0;
 		}
+		else if(handle->log)
+		{
+			lv2_log_error(&handle->logger, "%s: netatom_deserialize failed\n", "_read");
+		}
+	}
+	else if(handle->log)
+	{
+		lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", "_read");
 	}
 
 	return -1;
@@ -389,6 +514,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->unmap = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
 			handle->sched = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_LOG__log))
+			handle->log= features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_STATE__makePath))
 			mk_path = features[i]->data;
 	}
@@ -422,6 +549,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
+	if(handle->log)
+		lv2_log_logger_init(&handle->logger, handle->map, handle->log);
+
 	handle->path = mk_path->path(mk_path->handle, "seq.gz");
 	if(!handle->path)
 	{
@@ -441,14 +571,18 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	handle->to_worker = varchunk_new(0x100000, true); // 1M
 	if(!handle->to_worker)
 	{
+		fprintf(stderr,
+			"%s: Failed to initialize ringbuffer\n", descriptor->URI);
 		netatom_free(handle->netatom);
 		free(handle);
 		return NULL;
 	}
 
-	handle->from_worker = varchunk_new(0x100000, true); // 1M
-	if(!handle->from_worker)
+	handle->to_dsp = varchunk_new(0x100000, true); // 1M
+	if(!handle->to_dsp)
 	{
+		fprintf(stderr,
+			"%s: Failed to initialize ringbuffer\n", descriptor->URI);
 		varchunk_free(handle->to_worker);
 		netatom_free(handle->netatom);
 		free(handle);
@@ -463,8 +597,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		| TIMELY_MASK_BEATS_PER_BAR
 		| TIMELY_MASK_BEATS_PER_MINUTE
 		| TIMELY_MASK_FRAMES_PER_SECOND
-		| TIMELY_MASK_SPEED
-		| TIMELY_MASK_BAR_BEAT_WHOLE;
+		| TIMELY_MASK_SPEED;
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
 
 	if(!props_init(&handle->props, descriptor->URI,
@@ -501,8 +634,6 @@ static void
 run(LV2_Handle instance, uint32_t nsamples)
 {
 	plughandle_t *handle = instance;
-
-	handle->last = 0; // reset frame time head
 
 	const uint32_t capacity = handle->event_out->atom.size;
 	LV2_Atom_Forge_Frame frame;
@@ -553,8 +684,8 @@ cleanup(LV2_Handle instance)
 
 	_close(handle);
 
-	if(handle->from_worker)
-		varchunk_free(handle->from_worker);
+	if(handle->to_dsp)
+		varchunk_free(handle->to_dsp);
 
 	if(handle->to_worker)
 		varchunk_free(handle->to_worker);
@@ -604,7 +735,7 @@ _work(LV2_Handle instance,
 {
 	plughandle_t *handle = instance;
 
-	const job_t *job = body;
+	const job_t *job;
 	size_t tot_size;
 
 	while((job = varchunk_read_request(handle->to_worker, &tot_size)))
@@ -613,16 +744,19 @@ _work(LV2_Handle instance,
 		{
 			case JOB_REPOSITION_PLAY:
 			{
-				_reopen(handle, "rb");
-				//FIXME handle job->beats
+				_reopen(handle, false, job->beats);
 
 				// send drain
 				job_t *job2;
-				if((job2 = varchunk_write_request(handle->from_worker, sizeof(job_t))))
+				if((job2 = varchunk_write_request(handle->to_dsp, sizeof(job_t))))
 				{
 					job2->type = JOB_DRAIN;
 
-					varchunk_write_advance(handle->from_worker, sizeof(job_t));
+					varchunk_write_advance(handle->to_dsp, sizeof(job_t));
+				}
+				else if(handle->log)
+				{
+					lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", "_work");
 				}
 			} // fall-through
 			case JOB_READ:
@@ -633,16 +767,19 @@ _work(LV2_Handle instance,
 
 			case JOB_REPOSITION_REC:
 			{
-				_reopen(handle, "wb9");
-				//FIXME handle job->beats
+				_reopen(handle, true, job->beats);
 
 				// send drain
 				job_t *job2;
-				if((job2 = varchunk_write_request(handle->from_worker, sizeof(job_t))))
+				if((job2 = varchunk_write_request(handle->to_dsp, sizeof(job_t))))
 				{
 					job2->type = JOB_DRAIN;
 
-					varchunk_write_advance(handle->from_worker, sizeof(job_t));
+					varchunk_write_advance(handle->to_dsp, sizeof(job_t));
+				}
+				else if(handle->log)
+				{
+					lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", "_work");
 				}
 			} break;
 
