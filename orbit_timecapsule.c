@@ -407,7 +407,7 @@ _reopen(plughandle_t *handle, bool writing, double beats)
 }
 
 static inline int
-_write(plughandle_t *handle, double beats, const LV2_Atom *atom)
+_write_to(plughandle_t *handle, double beats, const LV2_Atom *atom)
 {
 	//printf("_write\n");
 	if(!handle->gzfile)
@@ -445,7 +445,7 @@ _write(plughandle_t *handle, double beats, const LV2_Atom *atom)
 }
 
 static inline int
-_read(plughandle_t *handle)
+_read_from(plughandle_t *handle)
 {
 	//printf("_read\n");
 	if(!handle->gzfile)
@@ -761,7 +761,7 @@ _work(LV2_Handle instance,
 			} // fall-through
 			case JOB_READ:
 			{
-				while(_read(handle) == 0)
+				while(_read_from(handle) == 0)
 					;
 			} break;
 
@@ -785,7 +785,7 @@ _work(LV2_Handle instance,
 
 			case JOB_WRITE:
 			{
-				_write(handle, job->beats, job->atom);
+				_write_to(handle, job->beats, job->atom);
 			} break;
 
 			case JOB_DRAIN:
