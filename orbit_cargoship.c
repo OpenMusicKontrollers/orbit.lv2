@@ -22,7 +22,6 @@
 #include <orbit.h>
 #include <timely.h>
 #include <props.h>
-#include <netatom.lv2/netatom.h>
 
 #define MEGA(x) ((x) << 20)
 #define NANO(x) ((x) >> 20)
@@ -50,7 +49,6 @@ struct _plugstate_t {
 
 struct _plughandle_t {
 	LV2_URID_Map *map;
-	LV2_URID_Unmap *unmap;
 	LV2_Atom_Forge forge;
 	LV2_Atom_Forge_Ref ref;
 
@@ -80,8 +78,6 @@ struct _plughandle_t {
 	LV2_Worker_Schedule *sched;
 	bool requested;
 	bool update_memory;
-
-	netatom_t *netatom;
 };
 
 static inline void
@@ -293,8 +289,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
-		else if(!strcmp(features[i]->URI, LV2_URID__unmap))
-			handle->unmap = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
 			handle->sched = features[i]->data;
 	}
@@ -310,13 +304,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	{
 		fprintf(stderr,
 			"%s: Host does not support worker:schedule\n", descriptor->URI);
-		free(handle);
-		return NULL;
-	}
-
-	handle->netatom = netatom_new(handle->map, handle->unmap, true);
-	if(!handle->netatom)
-	{
 		free(handle);
 		return NULL;
 	}
@@ -462,9 +449,6 @@ static void
 cleanup(LV2_Handle instance)
 {
 	plughandle_t *handle = instance;
-
-	if(handle->netatom)
-		netatom_free(handle->netatom);
 
 	munlock(handle, sizeof(plughandle_t));
 	free(handle);

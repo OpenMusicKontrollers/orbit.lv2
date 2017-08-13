@@ -40,6 +40,8 @@ lv2_descriptor(uint32_t index)
 		case 5:
 			return &orbit_cargoship;
 		case 6:
+			return &orbit_timecapsule;
+		case 7:
 			return &orbit_quantum;
 		default:
 			return NULL;

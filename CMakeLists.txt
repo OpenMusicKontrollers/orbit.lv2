@@ -46,9 +46,9 @@ find_package(PkgConfig) # ${PKG_CONFIG_FOUND}
 pkg_search_module(LV2 REQUIRED lv2)
 include_directories(${LV2_INCLUDE_DIRS})
 
-#pkg_search_module(ZLIB REQUIRED zlib)
-#include_directories(${ZLIB_INCLUDE_DIRS})
-#set(LIBS ${LIBS} ${ZLIB_LDFLAGS})
+pkg_search_module(ZLIB REQUIRED zlib)
+include_directories(${ZLIB_INCLUDE_DIRS})
+set(LIBS ${LIBS} ${ZLIB_LDFLAGS})
 
 # orbit
 add_library(orbit MODULE
@@ -59,6 +59,7 @@ add_library(orbit MODULE
 	orbit_beatbox.c
 	orbit_subspace.c
 	orbit_cargoship.c
+	orbit_timecapsule.c
 	orbit_quantum.c)
 target_link_libraries(orbit m ${LIBS})
 set_target_properties(orbit PROPERTIES PREFIX "")
