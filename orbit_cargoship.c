@@ -52,6 +52,9 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 	LV2_Atom_Forge_Ref ref;
 
+	LV2_Log_Log *log;
+	LV2_Log_Logger logger;
+
 	struct {
 		LV2_URID beat_time;
 		LV2_URID memory;
@@ -291,6 +294,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->map = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_WORKER__schedule))
 			handle->sched = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_LOG__log))
+			handle->log= features[i]->data;
 	}
 
 	if(!handle->map)
@@ -300,6 +305,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
 	if(!handle->sched)
 	{
 		fprintf(stderr,
@@ -307,6 +313,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
+	if(handle->log)
+		lv2_log_logger_init(&handle->logger, handle->map, handle->log);
 
 	handle->urid.beat_time = handle->map->map(handle->map->handle, LV2_ATOM__beatTime);
 

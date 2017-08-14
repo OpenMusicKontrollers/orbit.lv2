@@ -527,6 +527,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
 	if(!handle->unmap)
 	{
 		fprintf(stderr,
@@ -534,6 +535,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
 	if(!handle->sched)
 	{
 		fprintf(stderr,
@@ -541,6 +543,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
 	if(!mk_path)
 	{
 		fprintf(stderr,

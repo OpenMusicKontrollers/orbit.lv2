@@ -43,6 +43,9 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 	LV2_Atom_Forge_Ref ref;
 
+	LV2_Log_Log *log;
+	LV2_Log_Logger logger;
+
 	timely_t timely;
 
 	const LV2_Atom_Sequence *event_in;
@@ -173,6 +176,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_LOG__log))
+			handle->log= features[i]->data;
 	}
 
 	if(!handle->map)
@@ -182,6 +187,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
+	if(handle->log)
+		lv2_log_logger_init(&handle->logger, handle->map, handle->log);
 
 	const timely_mask_t mask = 0;
 	timely_init(&handle->timely, handle->map, rate, mask, _cb, handle);
