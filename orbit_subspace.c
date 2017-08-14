@@ -260,7 +260,12 @@ run(LV2_Handle instance, uint32_t nsamples)
 	if(handle->ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);
 	else
+	{
 		lv2_atom_sequence_clear(handle->event_out);
+
+		if(handle->log)
+			lv2_log_trace(&handle->logger, "forge buffer overflow\n");
+	}
 }
 
 static void
