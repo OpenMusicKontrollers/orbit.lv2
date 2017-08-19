@@ -24,10 +24,13 @@
 #include <timely.h>
 #include <props.h>
 #include <varchunk.h>
+
+#define NETATOM_IMPLEMENTATION
 #include <netatom.lv2/netatom.h>
 
 #define MAX_NPROPS 2
 #define MAGIC_SIZE 8
+#define MAX_BUF 8192
 
 typedef struct _item_t item_t;
 typedef enum _job_type_t job_type_t;
@@ -91,6 +94,8 @@ struct _plughandle_t {
 	netatom_t *netatom;
 	varchunk_t *to_dsp;
 	varchunk_t *to_worker;
+
+	uint8_t buf [MAX_BUF];
 
 	char *path;
 	gzFile gzfile;
@@ -413,8 +418,10 @@ _write_to(plughandle_t *handle, double beats, const LV2_Atom *atom)
 	if(!handle->gzfile)
 		return -1;
 
-	uint32_t rx_size;
-	const uint8_t *rx_body = netatom_serialize(handle->netatom, atom, &rx_size);
+	memcpy(handle->buf, atom, lv2_atom_total_size(atom));
+
+	size_t rx_size;
+	const uint8_t *rx_body = netatom_serialize(handle->netatom, (LV2_Atom *)handle->buf, MAX_BUF, &rx_size);
 	if(rx_body)
 	{
 		item_t itm = {
@@ -474,7 +481,7 @@ _read_from(plughandle_t *handle)
 			return -1;
 		}
 
-		const LV2_Atom *atom = netatom_deserialize(handle->netatom, (const uint8_t *)job->atom, tx_size);
+		const LV2_Atom *atom = netatom_deserialize(handle->netatom, (uint8_t *)job->atom, tx_size);
 		if(atom)
 		{
 			const uint32_t atom_size = lv2_atom_total_size(atom);
