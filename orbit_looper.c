@@ -53,6 +53,9 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 	LV2_Atom_Forge_Ref ref;
 
+	LV2_Log_Log *log;
+	LV2_Log_Logger logger;
+
 	struct {
 		LV2_URID play_capacity;
 		LV2_URID rec_capacity;
@@ -338,6 +341,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_LOG__log))
+			handle->log= features[i]->data;
 	}
 
 	if(!handle->map)
@@ -347,6 +352,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
+	if(handle->log)
+		lv2_log_logger_init(&handle->logger, handle->map, handle->log);
 
 	handle->urid.beat_time = handle->map->map(handle->map->handle, LV2_ATOM__beatTime);
 
@@ -485,7 +493,12 @@ run(LV2_Handle instance, uint32_t nsamples)
 	if(handle->ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);
 	else
+	{
 		lv2_atom_sequence_clear(handle->event_out);
+
+		if(handle->log)
+			lv2_log_trace(&handle->logger, "forge buffer overflow\n");
+	}
 }
 
 static void

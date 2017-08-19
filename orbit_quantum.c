@@ -45,6 +45,9 @@ struct _plughandle_t {
 	LV2_Atom_Forge forge;
 	LV2_Atom_Forge_Ref ref;
 
+	LV2_Log_Log *log;
+	LV2_Log_Logger logger;
+
 	timely_t timely;
 
 	const LV2_Atom_Sequence *event_in;
@@ -129,6 +132,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
+		else if(!strcmp(features[i]->URI, LV2_LOG__log))
+			handle->log= features[i]->data;
 	}
 
 	if(!handle->map)
@@ -137,6 +142,9 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		free(handle);
 		return NULL;
 	}
+
+	if(handle->log)
+		lv2_log_logger_init(&handle->logger, handle->map, handle->log);
 
 	timely_mask_t mask = TIMELY_MASK_SPEED
 		| TIMELY_MASK_BAR_BEAT_WHOLE;
@@ -245,7 +253,12 @@ run(LV2_Handle instance, uint32_t nsamples)
 	if(handle->ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);
 	else
+	{
 		lv2_atom_sequence_clear(handle->event_out);
+
+		if(handle->log)
+			lv2_log_trace(&handle->logger, "forge buffer overflow\n");
+	}
 }
 
 static void
