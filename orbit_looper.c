@@ -25,7 +25,7 @@
 
 #define MAX_NPROPS 7
 
-#define BUF_SIZE 0x1000000 // 16 MB
+#define BUF_SIZE 0x2000000 // 32 MB
 #define BUF_PERCENT (100.f / (BUF_SIZE - sizeof(LV2_Atom)))
 
 typedef enum _punchmode_t punchmode_t;
@@ -206,9 +206,9 @@ _rec(plughandle_t *handle, const LV2_Atom_Event *ev)
 		handle->rec_ev_prev = handle->rec_ev_next;
 		handle->rec_ev_next = e;
 	}
-	else
+	else if(handle->log)
 	{
-		// overflow
+		lv2_log_trace(&handle->logger, "recording buffer overflow\n");
 	}
 }
 
@@ -342,7 +342,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		if(!strcmp(features[i]->URI, LV2_URID__map))
 			handle->map = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
-			handle->log= features[i]->data;
+			handle->log = features[i]->data;
 	}
 
 	if(!handle->map)
