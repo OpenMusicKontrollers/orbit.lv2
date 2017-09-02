@@ -23,7 +23,7 @@
 #include <timely.h>
 #include <props.h>
 
-#define MAX_NPROPS 7
+#define MAX_NPROPS 9
 
 #define BUF_SIZE 0x2000000 // 32 MB
 #define BUF_PERCENT (100.f / (BUF_SIZE - sizeof(LV2_Atom)))
@@ -42,6 +42,8 @@ struct _plugstate_t {
 	int32_t width;
 	int32_t mute;
 	int32_t switsch;
+	int32_t mute_toggle;
+	int32_t switsch_toggle;
 
 	int32_t play_capacity;
 	int32_t rec_capacity;
@@ -57,6 +59,10 @@ struct _plughandle_t {
 	LV2_Log_Logger logger;
 
 	struct {
+		LV2_URID mute;
+		LV2_URID mute_toggle;
+		LV2_URID switsch;
+		LV2_URID switsch_toggle;
 		LV2_URID play_capacity;
 		LV2_URID rec_capacity;
 		LV2_URID position;
@@ -101,11 +107,35 @@ _window_refresh(plughandle_t *handle)
 }
 
 static void
-_intercept(void *data, int64_t frames, props_impl_t *impl)
+_intercept_window(void *data, int64_t frames, props_impl_t *impl)
 {
 	plughandle_t *handle = data;
 
 	_window_refresh(handle);
+}
+
+static void
+_intercept_toggle(void *data, int64_t frames, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	if(handle->state.mute_toggle)
+	{
+		handle->state.mute_toggle = false;
+		handle->state.mute = !handle->state.mute;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.mute_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.mute, &handle->ref);
+	}
+
+	if(handle->state.switsch_toggle)
+	{
+		handle->state.switsch_toggle = false;
+		handle->state.switsch = !handle->state.switsch;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.switsch_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.switsch, &handle->ref);
+	}
 }
 
 static const props_def_t defs [MAX_NPROPS] = {
@@ -113,13 +143,13 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.property = ORBIT_URI"#looper_punch",
 		.offset = offsetof(plugstate_t, punch),
 		.type = LV2_ATOM__Int,
-		.event_cb = _intercept
+		.event_cb = _intercept_window
 	},
 	{
 		.property = ORBIT_URI"#looper_width",
 		.offset = offsetof(plugstate_t, width),
 		.type = LV2_ATOM__Int,
-		.event_cb = _intercept
+		.event_cb = _intercept_window
 	},
 	{
 		.property = ORBIT_URI"#looper_mute",
@@ -130,6 +160,18 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.property = ORBIT_URI"#looper_switch",
 		.offset = offsetof(plugstate_t, switsch),
 		.type = LV2_ATOM__Bool,
+	},
+	{
+		.property = ORBIT_URI"#looper_mute_toggle",
+		.offset = offsetof(plugstate_t, mute_toggle),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _intercept_toggle
+	},
+	{
+		.property = ORBIT_URI"#looper_switch_toggle",
+		.offset = offsetof(plugstate_t, switsch_toggle),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _intercept_toggle
 	},
 	{
 		.property = ORBIT_URI"#looper_play_capacity",
@@ -378,6 +420,10 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
+	handle->urid.mute = props_map(&handle->props, ORBIT_URI"#looper_mute");
+	handle->urid.mute_toggle = props_map(&handle->props, ORBIT_URI"#looper_mute_toggle");
+	handle->urid.switsch = props_map(&handle->props, ORBIT_URI"#looper_switch");
+	handle->urid.switsch_toggle = props_map(&handle->props, ORBIT_URI"#looper_switch_toggle");
 	handle->urid.play_capacity = props_map(&handle->props, ORBIT_URI"#looper_play_capacity");
 	handle->urid.rec_capacity = props_map(&handle->props, ORBIT_URI"#looper_rec_capacity");
 	handle->urid.position = props_map(&handle->props, ORBIT_URI"#looper_position");

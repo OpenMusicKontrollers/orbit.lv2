@@ -74,13 +74,23 @@ orbit:looper_width
 orbit:looper_mute
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
-	rdfs:comment "toggle to mute playback or not" ;
+	rdfs:comment "change to mute playback or not" ;
 	rdfs:label "Mute" .
 orbit:looper_switch
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
-	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
+	rdfs:comment "change to switch playback and recording buffers at loop start" ;
 	rdfs:label "Switch" .
+orbit:looper_mute_toggle
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to mute playback or not" ;
+	rdfs:label "Mute toggle" .
+orbit:looper_switch_toggle
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
+	rdfs:label "Switch toggle" .
 
 orbit:looper_play_capacity
 	a lv2:Parameter ;
@@ -148,7 +158,9 @@ orbit:looper
 		orbit:looper_punch ,
 		orbit:looper_width ,
 		orbit:looper_mute ,
-		orbit:looper_switch ;
+		orbit:looper_switch ,
+		orbit:looper_mute_toggle ,
+		orbit:looper_switch_toggle ;
 	patch:readable
 		orbit:looper_play_capacity ,
 		orbit:looper_rec_capacity ,
@@ -159,6 +171,8 @@ orbit:looper
 		orbit:looper_width 4 ;
 		orbit:looper_mute false ;
 		orbit:looper_switch false ;
+		orbit:looper_mute_toggle false ;
+		orbit:looper_switch_toggle false ;
 	] .
 
 # Click Plugin
