@@ -25,7 +25,7 @@
 
 #define MEGA(x) ((x) << 20)
 #define NANO(x) ((x) >> 20)
-#define MAX_NPROPS 3
+#define MAX_NPROPS 5
 
 typedef struct _job_t job_t;
 typedef struct _plugstate_t plugstate_t;
@@ -43,6 +43,8 @@ struct _job_t {
 struct _plugstate_t {
 	int32_t mute;
 	int32_t record;
+	int32_t mute_toggle;
+	int32_t record_toggle;
 	int32_t memory;
 	uint8_t *buf;
 };
@@ -58,6 +60,10 @@ struct _plughandle_t {
 	struct {
 		LV2_URID beat_time;
 		LV2_URID memory;
+		LV2_URID mute;
+		LV2_URID mute_toggle;
+		LV2_URID record;
+		LV2_URID record_toggle;
 	} urid;
 	
 	timely_t timely;
@@ -104,6 +110,30 @@ _seq_unlock(plughandle_t *handle)
 	atomic_flag_clear_explicit(&handle->lock, memory_order_release);
 }
 
+static void
+_intercept_toggle(void *data, int64_t frames, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	if(handle->state.mute_toggle)
+	{
+		handle->state.mute_toggle = false;
+		handle->state.mute = !handle->state.mute;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.mute_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.mute, &handle->ref);
+	}
+
+	if(handle->state.record_toggle)
+	{
+		handle->state.record_toggle = false;
+		handle->state.record = !handle->state.record;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.record_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.record, &handle->ref);
+	}
+}
+
 static const props_def_t defs [MAX_NPROPS] = {
 	{
 		.property = ORBIT_URI"#cargoship_mute",
@@ -114,6 +144,18 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.property = ORBIT_URI"#cargoship_record",
 		.offset = offsetof(plugstate_t, record),
 		.type = LV2_ATOM__Bool,
+	},
+	{
+		.property = ORBIT_URI"#cargoship_mute_toggle",
+		.offset = offsetof(plugstate_t, mute_toggle),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _intercept_toggle
+	},
+	{
+		.property = ORBIT_URI"#cargoship_record_toggle",
+		.offset = offsetof(plugstate_t, record_toggle),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _intercept_toggle
 	},
 	{
 		.property = ORBIT_URI"#cargoship_memory",
@@ -340,6 +382,10 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	}
 
 	handle->urid.memory = props_map(&handle->props, ORBIT_URI"#cargoship_memory");
+	handle->urid.mute = props_map(&handle->props, ORBIT_URI"#cargoship_mute");
+	handle->urid.mute_toggle = props_map(&handle->props, ORBIT_URI"#cargoship_mute_toggle");
+	handle->urid.record = props_map(&handle->props, ORBIT_URI"#cargoship_record");
+	handle->urid.record_toggle = props_map(&handle->props, ORBIT_URI"#cargoship_record_toggle");
 
 	return handle;
 }

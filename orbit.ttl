@@ -573,13 +573,23 @@ orbit:subspace
 orbit:cargoship_mute
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
-	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
+	rdfs:comment "change to switch playback and recording buffers at loop start" ;
 	rdfs:label "Mute" .
 orbit:cargoship_record
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
-	rdfs:comment "toggle to switch to recording mode" ;
+	rdfs:comment "change to switch to recording mode" ;
 	rdfs:label "Record" .
+orbit:cargoship_mute_toggle
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to switch playback and recording buffers at loop start" ;
+	rdfs:label "Mute toggle" .
+orbit:cargoship_record_toggle
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to switch to recording mode" ;
+	rdfs:label "Record toggle" .
 orbit:cargoship_memory
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
@@ -634,13 +644,17 @@ orbit:cargoship
 
 	patch:writable
 		orbit:cargoship_mute ,
-		orbit:cargoship_record ;
+		orbit:cargoship_record ,
+		orbit:cargoship_mute_toggle ,
+		orbit:cargoship_record_toggle ;
 	patch:readable
 		orbit:cargoship_memory ;
 
 	state:state [
 		orbit:cargoship_mute false ;
 		orbit:cargoship_record true ;
+		orbit:cargoship_mute_toggle false ;
+		orbit:cargoship_record_toggle false ;
 	] .
 
 # TimeCapsule Plugin
