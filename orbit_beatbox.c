@@ -23,7 +23,7 @@
 #include <timely.h>
 #include <props.h>
 
-#define MAX_NPROPS 10
+#define MAX_NPROPS 12
 
 typedef struct _plugstate_t plugstate_t;
 typedef struct _plughandle_t plughandle_t;
@@ -31,6 +31,8 @@ typedef struct _plughandle_t plughandle_t;
 struct _plugstate_t {
 	int32_t bar_enabled;
 	int32_t beat_enabled;
+	int32_t bar_enabled_toggle;
+	int32_t beat_enabled_toggle;
 	int32_t bar_note;
 	int32_t beat_note;
 	int32_t bar_vel;
@@ -46,6 +48,10 @@ struct _plughandle_t {
 		LV2_URID midi_event;
 		LV2_URID bar_led;
 		LV2_URID beat_led;
+		LV2_URID bar_enabled;
+		LV2_URID beat_enabled;
+		LV2_URID bar_enabled_toggle;
+		LV2_URID beat_enabled_toggle;
 	} urid;
 
 	LV2_URID_Map *map;
@@ -113,6 +119,15 @@ _bar_intercept(void *data, int64_t frames, props_impl_t *impl)
 {
 	plughandle_t *handle = data;
 
+	if(handle->state.bar_enabled_toggle)
+	{
+		handle->state.bar_enabled_toggle = false;
+		handle->state.bar_enabled = !handle->state.bar_enabled;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.bar_enabled_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.bar_enabled, &handle->ref);
+	}
+
 	if(handle->bar_on)
 	{
 		_note_off(handle, frames, handle->bar_channel_old, handle->bar_note_old);
@@ -127,6 +142,15 @@ static void
 _beat_intercept(void *data, int64_t frames, props_impl_t *impl)
 {
 	plughandle_t *handle = data;
+
+	if(handle->state.beat_enabled_toggle)
+	{
+		handle->state.beat_enabled_toggle = false;
+		handle->state.beat_enabled = !handle->state.beat_enabled;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.beat_enabled_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.beat_enabled, &handle->ref);
+	}
 
 	if(handle->beat_on)
 	{
@@ -148,6 +172,18 @@ static const props_def_t defs [MAX_NPROPS] = {
 	{
 		.property = ORBIT_URI"#beatbox_beat_enabled",
 		.offset = offsetof(plugstate_t, beat_enabled),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _beat_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_bar_enabled_toggle",
+		.offset = offsetof(plugstate_t, bar_enabled_toggle),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _bar_intercept
+	},
+	{
+		.property = ORBIT_URI"#beatbox_beat_enabled_toggle",
+		.offset = offsetof(plugstate_t, beat_enabled_toggle),
 		.type = LV2_ATOM__Bool,
 		.event_cb = _beat_intercept
 	},
@@ -322,6 +358,10 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 
 	handle->urid.bar_led = props_map(&handle->props, ORBIT_URI"#beatbox_bar_led");
 	handle->urid.beat_led = props_map(&handle->props, ORBIT_URI"#beatbox_beat_led");
+	handle->urid.bar_enabled = props_map(&handle->props, ORBIT_URI"#beatbox_bar_enabled");
+	handle->urid.beat_enabled = props_map(&handle->props, ORBIT_URI"#beatbox_beat_enabled");
+	handle->urid.bar_enabled_toggle = props_map(&handle->props, ORBIT_URI"#beatbox_bar_enabled_toggle");
+	handle->urid.beat_enabled_toggle = props_map(&handle->props, ORBIT_URI"#beatbox_beat_enabled_toggle");
 
 	return handle;
 }

@@ -372,13 +372,23 @@ orbit:pacemaker
 orbit:beatbox_bar_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
-	rdfs:comment "toggle to send events on bars" ;
-	rdfs:label "Bar Enabled" .
+	rdfs:comment "change to send events on bars" ;
+	rdfs:label "Bar enabled" .
 orbit:beatbox_beat_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
+	rdfs:comment "change to send events on beats" ;
+	rdfs:label "Beat enabled" .
+orbit:beatbox_bar_enabled_toggle
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to send events on bars" ;
+	rdfs:label "Bar enabled toggle" .
+orbit:beatbox_beat_enabled_toggle
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
 	rdfs:comment "toggle to send events on beats" ;
-	rdfs:label "Beat Enabled" .
+	rdfs:label "Beat enabled toggle" .
 orbit:beatbox_bar_note
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
@@ -476,6 +486,8 @@ orbit:beatbox
 	patch:writable
 		orbit:beatbox_bar_enabled ,
 		orbit:beatbox_beat_enabled ,
+		orbit:beatbox_bar_enabled_toggle ,
+		orbit:beatbox_beat_enabled_toggle ,
 		orbit:beatbox_bar_note ,
 		orbit:beatbox_beat_note ,
 		orbit:beatbox_bar_velocity ,
@@ -486,6 +498,8 @@ orbit:beatbox
 	state:state [
 		orbit:beatbox_bar_enabled true ;
 		orbit:beatbox_beat_enabled true ;
+		orbit:beatbox_bar_enabled_toggle false ;
+		orbit:beatbox_beat_enabled_toggle false ;
 		orbit:beatbox_bar_note 36 ;
 		orbit:beatbox_beat_note 37 ;
 		orbit:beatbox_bar_velocity 64 ;
