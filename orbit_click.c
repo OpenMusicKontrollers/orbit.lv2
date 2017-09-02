@@ -23,7 +23,7 @@
 #include <timely.h>
 #include <props.h>
 
-#define MAX_NPROPS 4
+#define MAX_NPROPS 6
 
 typedef enum _state_t state_t;
 typedef struct _wave_t wave_t;
@@ -47,6 +47,8 @@ struct _wave_t {
 struct _plugstate_t {
 	int32_t bar_enabled;
 	int32_t beat_enabled;
+	int32_t bar_enabled_toggle;
+	int32_t beat_enabled_toggle;
 	int32_t bar_note;
 	int32_t beat_note;
 };
@@ -54,9 +56,17 @@ struct _plugstate_t {
 struct _plughandle_t {
 	LV2_URID_Map *map;
 	LV2_Atom_Forge forge;
+	LV2_Atom_Forge_Ref ref;
 
 	LV2_Log_Log *log;
 	LV2_Log_Logger logger;
+
+	struct {
+		LV2_URID bar_enabled;
+		LV2_URID bar_enabled_toggle;
+		LV2_URID beat_enabled;
+		LV2_URID beat_enabled_toggle;
+	} urid;
 
 	timely_t timely;
 
@@ -121,6 +131,30 @@ _beat_intercept(void *data, int64_t frames, props_impl_t *impl)
 	}
 }
 
+static void
+_intercept_toggle(void *data, int64_t frames, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	if(handle->state.bar_enabled_toggle)
+	{
+		handle->state.bar_enabled_toggle = false;
+		handle->state.bar_enabled = !handle->state.bar_enabled;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.bar_enabled_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.bar_enabled, &handle->ref);
+	}
+
+	if(handle->state.beat_enabled_toggle)
+	{
+		handle->state.beat_enabled_toggle = false;
+		handle->state.beat_enabled = !handle->state.beat_enabled;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.beat_enabled_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.beat_enabled, &handle->ref);
+	}
+}
+
 static const props_def_t defs [MAX_NPROPS] = {
 	{
 		.property = ORBIT_URI"#click_bar_enabled",
@@ -131,6 +165,18 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.property = ORBIT_URI"#click_beat_enabled",
 		.offset = offsetof(plugstate_t, beat_enabled),
 		.type = LV2_ATOM__Bool,
+	},
+	{
+		.property = ORBIT_URI"#click_bar_enabled_toggle",
+		.offset = offsetof(plugstate_t, bar_enabled_toggle),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _intercept_toggle
+	},
+	{
+		.property = ORBIT_URI"#click_beat_enabled_toggle",
+		.offset = offsetof(plugstate_t, beat_enabled_toggle),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _intercept_toggle
 	},
 	{
 		.property = ORBIT_URI"#click_bar_note",
@@ -224,6 +270,11 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
+	handle->urid.bar_enabled = props_map(&handle->props, ORBIT_URI"#click_bar_enabled");
+	handle->urid.bar_enabled_toggle = props_map(&handle->props, ORBIT_URI"#click_bar_enabled_toggle");
+	handle->urid.beat_enabled = props_map(&handle->props, ORBIT_URI"#click_beat_enabled");
+	handle->urid.beat_enabled_toggle = props_map(&handle->props, ORBIT_URI"#click_beat_enabled_toggle");
+
 	// Initialise instance fields
 	handle->rate = rate;
 	handle->attack_len = (uint32_t)(attack_s * rate);
@@ -312,9 +363,9 @@ run(LV2_Handle instance, uint32_t nsamples)
 	const uint32_t capacity = handle->event_out->atom.size;
 	LV2_Atom_Forge_Frame frame;
 	lv2_atom_forge_set_buffer(&handle->forge, (uint8_t *)handle->event_out, capacity);
-	LV2_Atom_Forge_Ref ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
+	handle->ref = lv2_atom_forge_sequence_head(&handle->forge, &frame, 0);
 
-	props_idle(&handle->props, &handle->forge, 0, &ref);
+	props_idle(&handle->props, &handle->forge, 0, &handle->ref);
 
 	// clear audio output buffer
 	memset(handle->bar.audio, 0x0, sizeof(float)*nsamples);
@@ -326,7 +377,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 
 		const LV2_Atom_Object *obj = (const LV2_Atom_Object *)&ev->body;
 		if(!timely_advance(&handle->timely, obj, last_t, ev->time.frames))
-			props_advance(&handle->props, &handle->forge, ev->time.frames, obj, &ref);
+			props_advance(&handle->props, &handle->forge, ev->time.frames, obj, &handle->ref);
 
 		last_t = ev->time.frames;
 	}
@@ -335,7 +386,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 	_play(handle, &handle->beat, last_t, nsamples);
 	timely_advance(&handle->timely, NULL, last_t, nsamples);
 
-	if(ref)
+	if(handle->ref)
 		lv2_atom_forge_pop(&handle->forge, &frame);
 	else
 	{

@@ -179,9 +179,19 @@ orbit:looper
 orbit:click_bar_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
-	rdfs:comment "toggle to enable/disable clicks on bars" ;
+	rdfs:comment "change to enable/disable clicks on bars" ;
 	rdfs:label "Bar Enabled" .
 orbit:click_beat_enabled
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "change to enable/disable clicks on beats" ;
+	rdfs:label "Beat Enabled" .
+orbit:click_bar_enabled_toggle
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to enable/disable clicks on bars" ;
+	rdfs:label "Bar Enabled" .
+orbit:click_beat_enabled_toggle
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
 	rdfs:comment "toggle to enable/disable clicks on beats" ;
@@ -246,12 +256,16 @@ orbit:click
 	patch:writable
 		orbit:click_bar_enabled ,
 		orbit:click_beat_enabled ,
+		orbit:click_bar_enabled_toggle ,
+		orbit:click_beat_enabled_toggle ,
 		orbit:click_bar_note ,
 		orbit:click_beat_note ;
 	
 	state:state [
 		orbit:click_bar_enabled true ;
 		orbit:click_beat_enabled true ;
+		orbit:click_bar_enabled_toggle false ;
+		orbit:click_beat_enabled_toggle false ;
 		orbit:click_bar_note 72 ;
 		orbit:click_beat_note 60 ;
 	] .
