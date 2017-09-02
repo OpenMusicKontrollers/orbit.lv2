@@ -22,7 +22,7 @@
 #include <orbit.h>
 #include <props.h>
 
-#define MAX_NPROPS 5
+#define MAX_NPROPS 6
 
 typedef struct _position_t position_t;
 typedef struct _plugstate_t plugstate_t;
@@ -47,6 +47,7 @@ struct _plugstate_t {
 	int32_t beats_per_bar;
 	int32_t beats_per_minute;
 	int32_t rolling;
+	int32_t rolling_toggle;
 	int32_t rewind;
 };
 
@@ -68,6 +69,7 @@ struct _plughandle_t {
 		LV2_URID time_speed;
 
 		LV2_URID rolling;
+		LV2_URID rolling_toggle;
 	} urid;
 
 	LV2_Atom_Forge forge;
@@ -150,6 +152,16 @@ _intercept(void *data, int64_t frames, props_impl_t *impl)
 	plughandle_t *handle = data;
 	position_t *pos = &handle->pos;
 
+	// handle toggle
+	if(handle->state.rolling_toggle)
+	{
+		handle->state.rolling_toggle = false;
+		handle->state.rolling = !handle->state.rolling;
+
+		props_set(&handle->props, &handle->forge, frames, handle->urid.rolling_toggle, &handle->ref);
+		props_set(&handle->props, &handle->forge, frames, handle->urid.rolling, &handle->ref);
+	}
+
 	// update mirror props
 	pos->beat_unit = handle->state.beat_unit;
 	pos->beats_per_bar = handle->state.beats_per_bar;
@@ -159,7 +171,10 @@ _intercept(void *data, int64_t frames, props_impl_t *impl)
 	// derive current position as bar_beat
 	pos->bar_beat = handle->rel / handle->frames_per_bar * pos->beats_per_bar;
 
-	if( (impl->property == handle->urid.rolling) && handle->state.rewind) // start/stop rolling
+	const bool is_rolling_urid = (impl->property == handle->urid.rolling)
+		|| (impl->property == handle->urid.rolling_toggle);
+
+	if(is_rolling_urid && handle->state.rewind) // start/stop rolling
 	{
 		pos->frame = 0; // reset frame pointer
 		pos->bar = 0; // reset bar
@@ -205,6 +220,12 @@ static const props_def_t defs [MAX_NPROPS] = {
 	{
 		.property = ORBIT_URI"#pacemaker_rolling",
 		.offset = offsetof(plugstate_t, rolling),
+		.type = LV2_ATOM__Bool,
+		.event_cb = _intercept
+	},
+	{
+		.property = ORBIT_URI"#pacemaker_rolling_toggle",
+		.offset = offsetof(plugstate_t, rolling_toggle),
 		.type = LV2_ATOM__Bool,
 		.event_cb = _intercept
 	},
@@ -277,6 +298,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	}
 
 	handle->urid.rolling = props_map(&handle->props, ORBIT_URI"#pacemaker_rolling");
+	handle->urid.rolling_toggle = props_map(&handle->props, ORBIT_URI"#pacemaker_rolling_toggle");
 
 	return handle;
 }

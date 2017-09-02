@@ -180,22 +180,22 @@ orbit:click_bar_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
 	rdfs:comment "change to enable/disable clicks on bars" ;
-	rdfs:label "Bar Enabled" .
+	rdfs:label "Bar enabled" .
 orbit:click_beat_enabled
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
 	rdfs:comment "change to enable/disable clicks on beats" ;
-	rdfs:label "Beat Enabled" .
+	rdfs:label "Beat enabled" .
 orbit:click_bar_enabled_toggle
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
 	rdfs:comment "toggle to enable/disable clicks on bars" ;
-	rdfs:label "Bar Enabled" .
+	rdfs:label "Bar enabled toggle" .
 orbit:click_beat_enabled_toggle
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
 	rdfs:comment "toggle to enable/disable clicks on beats" ;
-	rdfs:label "Beat Enabled" .
+	rdfs:label "Beat enabled toggle" .
 orbit:click_bar_note
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
@@ -305,8 +305,13 @@ orbit:pacemaker_beats_per_minute
 orbit:pacemaker_rolling
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
-	rdfs:comment "toggle to get transport rolling or to stop" ;
+	rdfs:comment "change to get transport rolling or to stop" ;
 	rdfs:label "Rolling" .
+orbit:pacemaker_rolling_toggle
+	a lv2:Parameter ;
+	rdfs:range atom:Bool ;
+	rdfs:comment "toggle to get transport rolling or to stop" ;
+	rdfs:label "Rolling toggle" .
 orbit:pacemaker_rewind
 	a lv2:Parameter ;
 	rdfs:range atom:Bool ;
@@ -351,6 +356,7 @@ orbit:pacemaker
 		orbit:pacemaker_beats_per_bar ,
 		orbit:pacemaker_beats_per_minute ,
 		orbit:pacemaker_rolling ,
+		orbit:pacemaker_rolling_toggle ,
 		orbit:pacemaker_rewind ;
 
 	state:state [
@@ -358,6 +364,7 @@ orbit:pacemaker
 		orbit:pacemaker_beats_per_bar 4 ;
 		orbit:pacemaker_beats_per_minute 120 ;
 		orbit:pacemaker_rolling false ;
+		orbit:pacemaker_rolling_toggle false ;
 		orbit:pacemaker_rewind true ;
 	] .
 
