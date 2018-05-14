@@ -16,13 +16,12 @@ Get more information at: [http://open-music-kontrollers.ch/lv2/orbit](http://ope
 
 ### Build / install
 
-	git clone https://github.com/OpenMusicKontrollers/orbit.lv2.git
+	git clone https://git.open-music-kontrollers.ch/lv2/orbit.lv2
 	cd orbit.lv2
-	mkdir build
+	meson build
 	cd build
-	cmake -DCMAKE_BUILD_TYPE="Release" ..
-	make
-	sudo make install
+	ninja -j4
+	sudo ninja install
 
 ### License
 
