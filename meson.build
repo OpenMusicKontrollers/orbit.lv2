@@ -16,6 +16,7 @@ clone = [cp, '@INPUT@', '@OUTPUT@']
 m_dep = cc.find_library('m')
 lv2_dep = dependency('lv2', version : '>=1.14.0')
 zlib_dep = dependency('zlib', version : '>=1.2.0')
+dsp_deps = [m_dep, lv2_dep, zlib_dep]
 
 props_inc = include_directories('props.lv2')
 netatom_inc = include_directories('netatom.lv2')
@@ -39,11 +40,19 @@ c_args = ['-fvisibility=hidden',
 	'-ffast-math',
 	'-Wno-unused-variable']
 
+if host_machine.system() == 'linux'
+	# nothing
+elif host_machine.system() == 'windows'
+	dsp_deps += cc.find_library('ws2_32')
+elif host_machine.system() == 'darwin'
+	# nothing
+endif
+
 mod = shared_module('orbit', dsp_srcs,
 	c_args : c_args,
 	include_directories : inc_dir,
 	name_prefix : '',
-	dependencies : [m_dep, lv2_dep, zlib_dep],
+	dependencies : dsp_deps,
 	install : true,
 	install_dir : inst_dir)
 
