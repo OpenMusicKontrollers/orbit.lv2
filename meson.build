@@ -16,7 +16,7 @@ clone = [cp, '@INPUT@', '@OUTPUT@']
 m_dep = cc.find_library('m')
 lv2_dep = dependency('lv2', version : '>=1.14.0')
 zlib_dep = dependency('zlib', version : '>=1.2.0',
-	static : meson.is_cross_build())
+	static : meson.is_cross_build() and false) #FIXME
 dsp_deps = [m_dep, lv2_dep, zlib_dep]
 
 props_inc = include_directories('props.lv2')
