@@ -41,11 +41,11 @@ c_args = ['-fvisibility=hidden',
 	'-ffast-math',
 	'-Wno-unused-variable']
 
-if host_machine.system() == 'linux'
-	# nothing
-elif host_machine.system() == 'windows'
+if host_machine.system() == 'windows'
 	dsp_deps += cc.find_library('ws2_32')
 elif host_machine.system() == 'darwin'
+	# nothing
+else
 	# nothing
 endif
 
