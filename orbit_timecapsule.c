@@ -410,10 +410,13 @@ _reopen_disk(plughandle_t *handle, bool writing, double beats)
 	if(beats > 0.0)
 	{
 		handle->gzfile = gzopen(handle->path, reading_mode);
-		if(!handle->gzfile && handle->log)
+		if(!handle->gzfile)
 		{
-			lv2_log_error(&handle->logger, "%s: gzopen failed\n", "_reopen");
-			return;
+			if(handle->log)
+			{
+				lv2_log_error(&handle->logger, "%s: gzopen failed\n", "_reopen");
+			}
+			goto stage_2;
 		}
 
 		double _beats;
@@ -440,10 +443,14 @@ _reopen_disk(plughandle_t *handle, bool writing, double beats)
 		_close_disk(handle);
 	}
 
+stage_2:
 	handle->gzfile = gzopen(handle->path, writing ? writing_mode : reading_mode);
-	if(!handle->gzfile && handle->log)
+	if(!handle->gzfile)
 	{
-		lv2_log_error(&handle->logger, "%s: gzopen failed\n", "_reopen");
+		if(handle->log)
+		{
+			lv2_log_error(&handle->logger, "%s: gzopen failed\n", "_reopen");
+		}
 		return;
 	}
 
