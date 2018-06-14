@@ -11,6 +11,8 @@ conf_data = configuration_data()
 cc = meson.get_compiler('c')
 
 cp = find_program('cp')
+lv2_validate = find_program('lv2_validate', native : true, required : false)
+lv2lint = find_program('lv2lint', required : false)
 clone = [cp, '@INPUT@', '@OUTPUT@']
 
 m_dep = cc.find_library('m')
@@ -65,13 +67,31 @@ conf_data.set('MICRO_VERSION', version[2])
 suffix = mod.full_path().strip().split('.')[-1]
 conf_data.set('MODULE_SUFFIX', '.' + suffix)
 
-configure_file(input : 'manifest.ttl.in', output : 'manifest.ttl',
+manifest_ttl = configure_file(input : 'manifest.ttl.in', output : 'manifest.ttl',
 	configuration : conf_data,
 	install : true,
 	install_dir : inst_dir)
-custom_target('orbit_ttl',
+dsp_ttl = custom_target('orbit_ttl',
 	input : 'orbit.ttl',
 	output : 'orbit.ttl',
 	command : clone,
 	install : true,
 	install_dir : inst_dir)
+
+if lv2_validate.found()
+	test('LV2 validate', lv2_validate,
+		args : [manifest_ttl, dsp_ttl])
+endif
+
+if lv2lint.found()
+	test('LV2 lint', lv2lint,
+		args : ['-Swarn', # -Ewarn fails due to linking against libz
+			'http://open-music-kontrollers.ch/lv2/orbit#beatbox',
+			'http://open-music-kontrollers.ch/lv2/orbit#cargoship',
+			'http://open-music-kontrollers.ch/lv2/orbit#click',
+			'http://open-music-kontrollers.ch/lv2/orbit#looper',
+			'http://open-music-kontrollers.ch/lv2/orbit#pacemaker',
+			'http://open-music-kontrollers.ch/lv2/orbit#quantum',
+			'http://open-music-kontrollers.ch/lv2/orbit#subspace',
+			'http://open-music-kontrollers.ch/lv2/orbit#timecapsule'])
+endif
