@@ -80,7 +80,6 @@ struct _plughandle_t {
 	double frames_per_bar;
 	double frames_per_beat;
 	double rel;
-	int64_t off;
 
 	const LV2_Atom_Sequence *event_in;
 	LV2_Atom_Sequence *event_out;
@@ -172,17 +171,15 @@ _intercept(void *data, int64_t frames, props_impl_t *impl)
 	// derive current position as bar_beat
 	pos->bar_beat = handle->rel / handle->frames_per_bar * pos->beats_per_bar;
 
-	if(impl)
-	{
-		const bool is_rolling_urid = (impl->property == handle->urid.rolling)
-			|| (impl->property == handle->urid.rolling_toggle);
+	const bool is_rolling_urid = (impl->property == handle->urid.rolling)
+		|| (impl->property == handle->urid.rolling_toggle);
 
-		if(is_rolling_urid && handle->state.rewind) // start/stop rolling
-		{
-			pos->bar = 0; // reset bar
-			pos->bar_beat = 0.f; // reset beat
-			handle->rel = 0.0;
-		}
+	if(is_rolling_urid && handle->state.rewind) // start/stop rolling
+	{
+		pos->frame = 0; // reset frame pointer
+		pos->bar = 0; // reset bar
+		pos->bar_beat = 0.f; // reset beat
+		handle->rel = 0.0;
 	}
 
 	if(pos->bar_beat >= pos->beats_per_bar) // move to end of bar if beat overflows bar
@@ -341,7 +338,6 @@ activate(LV2_Handle instance)
 	handle->frames_per_beat = 240.0 / (pos->beats_per_minute * pos->beat_unit) * pos->frames_per_second;
 	handle->frames_per_bar = handle->frames_per_beat * pos->beats_per_bar;
 	handle->rel = 0.0;
-	handle->off = 0;
 }
 
 static inline void
@@ -350,27 +346,18 @@ _advance(plughandle_t *handle, uint32_t from, uint32_t to)
 	position_t *pos = &handle->pos;
 	const uint32_t nsamples = to - from;
 
-	// update frame position
-	pos->frame += nsamples;
-	handle->off += nsamples;
-
 	if(pos->speed > 0.f)
 	{
+		// update frame position
+		pos->frame += nsamples * pos->speed;
+
 		// update rel position
-		handle->rel += nsamples * pos->speed;
+		handle->rel += nsamples;
 		if(handle->rel >= handle->frames_per_bar)
 		{
 			pos->bar += 1;
 			handle->rel -= handle->frames_per_bar;
 		}
-	}
-
-	if(handle->off >= pos->frames_per_second)
-	{
-		handle->off -= pos->frames_per_second;
-		const int64_t frames = from + handle->off;
-
-		_intercept(handle, frames, NULL);
 	}
 }
 
