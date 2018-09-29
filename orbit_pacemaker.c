@@ -358,7 +358,7 @@ _advance(plughandle_t *handle, uint32_t from, uint32_t to)
 	{
 		// update rel position
 		handle->rel += nsamples * pos->speed;
-		while(handle->rel >= handle->frames_per_bar)
+		if(handle->rel >= handle->frames_per_bar)
 		{
 			pos->bar += 1;
 			handle->rel -= handle->frames_per_bar;
@@ -367,12 +367,9 @@ _advance(plughandle_t *handle, uint32_t from, uint32_t to)
 
 	if(handle->off >= pos->frames_per_second)
 	{
-		while(handle->off >= pos->frames_per_second)
-		{
-			handle->off -= pos->frames_per_second;
-		}
-
+		handle->off -= pos->frames_per_second;
 		const int64_t frames = from + handle->off;
+
 		_intercept(handle, frames, NULL);
 	}
 }
