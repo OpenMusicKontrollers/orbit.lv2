@@ -125,7 +125,7 @@ _wakeup(plughandle_t *handle)
 		handle->sched->handle, sizeof(int32_t), &dummy);
 	if( (status != LV2_WORKER_SUCCESS) && handle->log)
 	{
-		lv2_log_trace(&handle->logger, "%s: work:schedule failed\n", "_wakeup");
+		lv2_log_trace(&handle->logger, "%s: work:schedule failed\n", __func__);
 	}
 }
 
@@ -144,7 +144,7 @@ _request_read(plughandle_t *handle)
 	}
 	else if(handle->log)
 	{
-		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", "_request_read");
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", __func__);
 	}
 }
 
@@ -165,7 +165,7 @@ _reposition_play(plughandle_t *handle, double beats)
 	}
 	else if(handle->log)
 	{
-		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", "_reposition_play");
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", __func__);
 	}
 }
 
@@ -186,7 +186,7 @@ _reposition_rec(plughandle_t *handle, double beats)
 	}
 	else if(handle->log)
 	{
-		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", "_reposition_rec");
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", __func__);
 	}
 }
 
@@ -334,7 +334,7 @@ _rec(plughandle_t *handle, const LV2_Atom_Event *ev)
 	}
 	else if(handle->log)
 	{
-		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", "_rec");
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", __func__);
 	}
 }
 
@@ -384,7 +384,7 @@ _read_header(plughandle_t *handle, double *beats, uint32_t *size)
 		const char *err = gzerror(handle->gzfile, &errnum);
 		if( (errnum != Z_OK) && handle->log)
 		{
-			lv2_log_error(&handle->logger, "%s: gzfread failed: %s\n", "_read_header", err);
+			lv2_log_error(&handle->logger, "%s: gzfread failed: %s\n", __func__, err);
 		}
 		return -1;
 	}
@@ -414,7 +414,7 @@ _reopen_disk(plughandle_t *handle, bool writing, double beats)
 		{
 			if(handle->log)
 			{
-				lv2_log_error(&handle->logger, "%s: gzopen failed\n", "_reopen");
+				lv2_log_error(&handle->logger, "%s: gzopen failed\n", __func__);
 			}
 			goto stage_2;
 		}
@@ -432,7 +432,7 @@ _reopen_disk(plughandle_t *handle, bool writing, double beats)
 				const int res = gzseek(handle->gzfile, _size, SEEK_CUR); // skip item payload
 				if( (res == -1) && handle->log)
 				{
-					lv2_log_error(&handle->logger, "%s: gzseek failed\n", "_reopen");
+					lv2_log_error(&handle->logger, "%s: gzseek failed\n", __func__);
 					break;
 				}
 			}
@@ -449,7 +449,7 @@ stage_2:
 	{
 		if(handle->log)
 		{
-			lv2_log_error(&handle->logger, "%s: gzopen failed\n", "_reopen");
+			lv2_log_error(&handle->logger, "%s: gzopen failed\n", __func__);
 		}
 		return;
 	}
@@ -459,7 +459,7 @@ stage_2:
 		const int res = gzseek(handle->gzfile, offset, SEEK_SET);
 		if( (res == -1) && handle->log)
 		{
-			lv2_log_error(&handle->logger, "%s: gzseek failed\n", "_reopen");
+			lv2_log_error(&handle->logger, "%s: gzseek failed\n", __func__);
 		}
 	}
 }
@@ -491,14 +491,14 @@ _write_to(plughandle_t *handle, double beats, const LV2_Atom *atom)
 		{
 			int errnum;
 			const char *err = gzerror(handle->gzfile, &errnum);
-			lv2_log_error(&handle->logger, "%s: gsfwrite failed: %s\n", "_write", err);
+			lv2_log_error(&handle->logger, "%s: gsfwrite failed: %s\n", __func__, err);
 		}
 
 		return 0;
 	}
 	else if(handle->log)
 	{
-		lv2_log_error(&handle->logger, "%s: netatom_serialize failed\n", "_write");
+		lv2_log_error(&handle->logger, "%s: netatom_serialize failed\n", __func__);
 	}
 
 	return -1;
@@ -529,7 +529,7 @@ _read_from(plughandle_t *handle)
 			const char *err = gzerror(handle->gzfile, &errnum);
 			if( (errnum != Z_OK) && handle->log)
 			{
-				lv2_log_error(&handle->logger, "%s: gzfread failed: %s\n", "_read", err);
+				lv2_log_error(&handle->logger, "%s: gzfread failed: %s\n", __func__, err);
 			}
 			return -1;
 		}
@@ -545,12 +545,12 @@ _read_from(plughandle_t *handle)
 		}
 		else if(handle->log)
 		{
-			lv2_log_error(&handle->logger, "%s: netatom_deserialize failed\n", "_read");
+			lv2_log_error(&handle->logger, "%s: netatom_deserialize failed\n", __func__);
 		}
 	}
 	else if(handle->log)
 	{
-		lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", "_read");
+		lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", __func__);
 	}
 
 	return -1;
@@ -746,7 +746,7 @@ run(LV2_Handle instance, uint32_t nsamples)
 		lv2_atom_sequence_clear(handle->event_out);
 
 		if(handle->log)
-			lv2_log_trace(&handle->logger, "forge buffer overflow\n");
+			lv2_log_trace(&handle->logger, "%s: forge buffer overflow\n", __func__);
 	}
 }
 
@@ -829,7 +829,7 @@ _work(LV2_Handle instance,
 				}
 				else if(handle->log)
 				{
-					lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", "_work");
+					lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", __func__);
 				}
 			} // fall-through
 			case TC_JOB_READ:
@@ -852,7 +852,7 @@ _work(LV2_Handle instance,
 				}
 				else if(handle->log)
 				{
-					lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", "_work");
+					lv2_log_error(&handle->logger, "%s: ringbuffer overflow\n", __func__);
 				}
 			} break;
 
