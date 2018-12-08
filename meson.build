@@ -31,7 +31,6 @@ inst_dir = join_paths(get_option('libdir'), 'lv2', meson.project_name())
 
 dsp_srcs = ['orbit.c',
 	'orbit_beatbox.c',
-	'orbit_cargoship.c',
 	'orbit_click.c',
 	'orbit_looper.c',
 	'orbit_pacemaker.c',
@@ -87,7 +86,6 @@ if lv2lint.found()
 	test('LV2 lint', lv2lint,
 		args : ['-Swarn', # -Ewarn fails due to linking against libz
 			'http://open-music-kontrollers.ch/lv2/orbit#beatbox',
-			'http://open-music-kontrollers.ch/lv2/orbit#cargoship',
 			'http://open-music-kontrollers.ch/lv2/orbit#click',
 			'http://open-music-kontrollers.ch/lv2/orbit#looper',
 			'http://open-music-kontrollers.ch/lv2/orbit#pacemaker',

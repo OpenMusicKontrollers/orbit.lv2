@@ -27,14 +27,6 @@ orbit:looper
 	lv2:binary <orbit@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <orbit.ttl> .
 
-# Orbit CargoShip
-orbit:cargoship
-	a lv2:Plugin ;
-	lv2:minorVersion @MINOR_VERSION@ ;
-	lv2:microVersion @MICRO_VERSION@ ;
-	lv2:binary <orbit@MODULE_SUFFIX@> ;
-	rdfs:seeAlso <orbit.ttl> .
-
 # Orbit TimeCapsule
 orbit:timecapsule
 	a lv2:Plugin ;
