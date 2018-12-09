@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <zlib.h>
+#include <limits.h>
 
 #include <orbit.h>
 #include <timely.h>
@@ -28,7 +29,7 @@
 #define NETATOM_IMPLEMENTATION
 #include <netatom.lv2/netatom.h>
 
-#define MAX_NPROPS 4
+#define MAX_NPROPS 5
 #define MAGIC_SIZE 8
 #define MAX_BUF 8192
 
@@ -65,7 +66,7 @@ struct _plugstate_t {
 	int32_t record;
 	int32_t mute_toggle;
 	int32_t record_toggle;
-	int32_t memory;
+	char file_path [PATH_MAX];
 };
 
 struct _plughandle_t {
@@ -106,7 +107,7 @@ struct _plughandle_t {
 
 	uint8_t buf [MAX_BUF];
 
-	char *path;
+	char path [PATH_MAX];
 	gzFile gzfile;
 	bool draining;
 };
@@ -229,6 +230,14 @@ _record_intercept(void *data, int64_t frames, props_impl_t *impl)
 		_reposition_play(handle, beats);
 }
 
+static void
+_path_intercept(void *data, int64_t frames, props_impl_t *impl)
+{
+	plughandle_t *handle = data;
+
+	//FIXME
+}
+
 static const props_def_t defs [MAX_NPROPS] = {
 	{
 		.property = ORBIT_URI"#timecapsule_mute",
@@ -253,6 +262,13 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.offset = offsetof(plugstate_t, record_toggle),
 		.type = LV2_ATOM__Bool,
 		.event_cb = _record_intercept
+	},
+	{
+		.property = ORBIT_URI"#timecapsule_file_path",
+		.offset = offsetof(plugstate_t, file_path),
+		.type = LV2_ATOM__String,
+		.event_cb = _path_intercept,
+		.max_size = PATH_MAX
 	}
 };
 
@@ -565,7 +581,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	mlock(handle, sizeof(plughandle_t));
 
-	LV2_State_Make_Path *mk_path = NULL;
 	for(unsigned i=0; features[i]; i++)
 	{
 		if(!strcmp(features[i]->URI, LV2_URID__map))
@@ -576,8 +591,6 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 			handle->sched = features[i]->data;
 		else if(!strcmp(features[i]->URI, LV2_LOG__log))
 			handle->log= features[i]->data;
-		else if(!strcmp(features[i]->URI, LV2_STATE__makePath))
-			mk_path = features[i]->data;
 	}
 
 	if(!handle->map)
@@ -604,25 +617,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 		return NULL;
 	}
 
-	if(!mk_path)
-	{
-		fprintf(stderr,
-			"%s: Host does not support state:makePath\n", descriptor->URI);
-		free(handle);
-		return NULL;
-	}
-
 	if(handle->log)
 		lv2_log_logger_init(&handle->logger, handle->map, handle->log);
-
-	handle->path = mk_path->path(mk_path->handle, "seq.gz");
-	if(!handle->path)
-	{
-		free(handle);
-		return NULL;
-	}
-
-	handle->gzfile = NULL;
 
 	handle->netatom = netatom_new(handle->map, handle->unmap, true);
 	if(!handle->netatom)
@@ -765,9 +761,6 @@ cleanup(LV2_Handle instance)
 
 	if(handle->netatom)
 		netatom_free(handle->netatom);
-
-	if(handle->path)
-		free(handle->path);
 
 	munlock(handle, sizeof(plughandle_t));
 	free(handle);

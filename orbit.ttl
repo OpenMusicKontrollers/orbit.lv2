@@ -590,12 +590,11 @@ orbit:timecapsule_record_toggle
 	rdfs:range atom:Bool ;
 	rdfs:comment "toggle to switch to recording mode" ;
 	rdfs:label "Record toggle" .
-
-units:mb
-	a units:Unit ;
-	rdfs:label "megabytes" ;
-	units:render "%f MB" ;
-	units:symbol "MB" .
+orbit:timecapsule_file_path
+	a lv2:Parameter ;
+	rdfs:range atom:Path ;
+	rdfs:comment "change to file path on disk" ;
+	rdfs:label "File path" .
 
 orbit:timecapsule
 	a lv2:Plugin ,
@@ -603,7 +602,7 @@ orbit:timecapsule
 	doap:name "Orbit TimeCapsule" ;
 	doap:license lic:Artistic-2.0 ;
 	lv2:project proj:orbit ;
-	lv2:requiredFeature urid:map, urid:unmap, state:makePath, state:loadDefaultState, work:schedule ;
+	lv2:requiredFeature urid:map, urid:unmap, state:loadDefaultState, work:schedule ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
 	lv2:extensionData	state:interface, work:interface ;
 
@@ -638,13 +637,15 @@ orbit:timecapsule
 		orbit:timecapsule_mute ,
 		orbit:timecapsule_record ,
 		orbit:timecapsule_mute_toggle ,
-		orbit:timecapsule_record_toggle ;
+		orbit:timecapsule_record_toggle ,
+		orbit:timecapsule_file_path ;
 
 	state:state [
 		orbit:timecapsule_mute false ;
 		orbit:timecapsule_record false ;
 		orbit:timecapsule_mute_toggle false ;
 		orbit:timecapsule_record_toggle false ;
+		orbit:timecapsule_file_path <>;
 	] .
 
 orbit:quantum_mode
