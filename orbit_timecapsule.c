@@ -52,13 +52,17 @@ enum _job_type_t {
 	TC_JOB_REPOSITION_PLAY,
 	TC_JOB_READ,
 	TC_JOB_REPOSITION_REC,
-	TC_JOB_WRITE
+	TC_JOB_WRITE,
+	TC_JOB_CHANGE_PATH
 };
 
 struct _job_t {
 	job_type_t type;
 	double beats;
-	LV2_Atom atom [0];
+	union {
+		LV2_Atom atom [0];
+		char file_path [0];
+	};
 };
 
 struct _plugstate_t {
@@ -110,6 +114,7 @@ struct _plughandle_t {
 	char path [PATH_MAX];
 	gzFile gzfile;
 	bool draining;
+	char file_path [PATH_MAX];
 };
 
 static const char magic [MAGIC_SIZE] = "netatom"; //FIXME use
@@ -235,7 +240,26 @@ _path_intercept(void *data, int64_t frames, props_impl_t *impl)
 {
 	plughandle_t *handle = data;
 
-	//FIXME
+	const size_t len = strlen(handle->state.file_path) + 1;
+	const size_t tot_size = sizeof(job_t) + len;
+	const double beats = handle->offset / TIMELY_FRAMES_PER_BEAT(&handle->timely);
+	if(!isfinite(beats))
+		return;
+
+	job_t *job;
+	if((job = varchunk_write_request(handle->to_worker, tot_size)))
+	{
+		job->beats = beats;
+		job->type = TC_JOB_CHANGE_PATH;
+		snprintf(job->file_path, len, handle->state.file_path);
+
+		varchunk_write_advance(handle->to_worker, tot_size);
+		_wakeup(handle);
+	}
+	else if(handle->log)
+	{
+		lv2_log_trace(&handle->logger, "%s: ringbuffer overflow\n", __func__);
+	}
 }
 
 static const props_def_t defs [MAX_NPROPS] = {
@@ -266,7 +290,7 @@ static const props_def_t defs [MAX_NPROPS] = {
 	{
 		.property = ORBIT_URI"#timecapsule_file_path",
 		.offset = offsetof(plugstate_t, file_path),
-		.type = LV2_ATOM__String,
+		.type = LV2_ATOM__Path,
 		.event_cb = _path_intercept,
 		.max_size = PATH_MAX
 	}
@@ -313,10 +337,13 @@ _play(plughandle_t *handle, int64_t to)
 					handle->draining = false;
 			} break;
 
+			case TC_JOB_CHANGE_PATH:
 			case TC_JOB_REPOSITION_PLAY:
 			case TC_JOB_READ:
 			case TC_JOB_REPOSITION_REC:
-				break;
+			{
+				// nothing to do
+			} break;
 		}
 
 		varchunk_read_advance(handle->to_dsp);
@@ -425,7 +452,7 @@ _reopen_disk(plughandle_t *handle, bool writing, double beats)
 
 	if(beats > 0.0)
 	{
-		handle->gzfile = gzopen(handle->path, reading_mode);
+		handle->gzfile = gzopen(handle->file_path, reading_mode);
 		if(!handle->gzfile)
 		{
 			if(handle->log)
@@ -460,7 +487,7 @@ _reopen_disk(plughandle_t *handle, bool writing, double beats)
 	}
 
 stage_2:
-	handle->gzfile = gzopen(handle->path, writing ? writing_mode : reading_mode);
+	handle->gzfile = gzopen(handle->file_path, writing ? writing_mode : reading_mode);
 	if(!handle->gzfile)
 	{
 		if(handle->log)
@@ -852,6 +879,13 @@ _work(LV2_Handle instance,
 			case TC_JOB_WRITE:
 			{
 				_write_to(handle, job->beats, job->atom);
+			} break;
+
+			case TC_JOB_CHANGE_PATH:
+			{
+				_close_disk(handle);
+				strncpy(handle->file_path, job->file_path, PATH_MAX);
+				_reopen_disk(handle, false, job->beats); // open readonly by default
 			} break;
 
 			case TC_JOB_DRAIN:
