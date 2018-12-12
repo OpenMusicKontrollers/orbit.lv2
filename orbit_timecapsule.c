@@ -20,6 +20,8 @@
 #include <math.h>
 #include <zlib.h>
 #include <limits.h>
+#include <errno.h>
+#include <string.h>
 
 #include <orbit.h>
 #include <timely.h>
@@ -457,7 +459,8 @@ _reopen_disk(plughandle_t *handle, bool writing, double beats)
 		{
 			if(handle->log)
 			{
-				lv2_log_error(&handle->logger, "%s: gzopen failed\n", __func__);
+				lv2_log_error(&handle->logger, "%s: gzopen failed: %s '%s'\n",
+					__func__, handle->file_path, strerror(errno));
 			}
 			goto stage_2;
 		}
@@ -475,7 +478,8 @@ _reopen_disk(plughandle_t *handle, bool writing, double beats)
 				const int res = gzseek(handle->gzfile, _size, SEEK_CUR); // skip item payload
 				if( (res == -1) && handle->log)
 				{
-					lv2_log_error(&handle->logger, "%s: gzseek failed\n", __func__);
+					lv2_log_error(&handle->logger, "%s: gzseek failed: %s '%s'\n",
+						__func__, handle->file_path, strerror(errno));
 					break;
 				}
 			}
@@ -492,7 +496,8 @@ stage_2:
 	{
 		if(handle->log)
 		{
-			lv2_log_error(&handle->logger, "%s: gzopen failed\n", __func__);
+			lv2_log_error(&handle->logger, "%s: gzopen failed: %s '%s'\n",
+				__func__, handle->file_path, strerror(errno));
 		}
 		return;
 	}
@@ -502,7 +507,8 @@ stage_2:
 		const int res = gzseek(handle->gzfile, offset, SEEK_SET);
 		if( (res == -1) && handle->log)
 		{
-			lv2_log_error(&handle->logger, "%s: gzseek failed\n", __func__);
+			lv2_log_error(&handle->logger, "%s: gzseek failed: %s '%s'\n",
+				__func__, handle->file_path, strerror(errno));
 		}
 	}
 }
@@ -885,7 +891,7 @@ _work(LV2_Handle instance,
 			{
 				_close_disk(handle);
 				strncpy(handle->file_path, job->file_path, PATH_MAX);
-				_reopen_disk(handle, false, job->beats); // open readonly by default
+				_reopen_disk(handle, false, job->beats); // open readonly by default FIXME
 			} break;
 
 			case TC_JOB_DRAIN:
