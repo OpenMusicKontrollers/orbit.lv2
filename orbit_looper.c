@@ -217,7 +217,7 @@ static const props_def_t defs [MAX_NPROPS] = {
 		.access = LV2_PATCH__writable,
 		.type = LV2_ATOM__Sequence,
 		.max_size = BUF_SIZE,
-		//.hidden = true
+		.hidden = true,
 		.event_cb = _intercept_play
 	},
 };
