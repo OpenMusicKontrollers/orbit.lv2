@@ -70,6 +70,7 @@ struct _plughandle_t {
 		LV2_URID position;
 		LV2_URID beat_time;
 		LV2_URID play_sequence;
+		LV2_URID midi_event;
 	} urid;
 	
 	timely_t timely;
@@ -96,6 +97,8 @@ struct _plughandle_t {
 
 	LV2_Atom_Event *rec_ev_next;
 	LV2_Atom_Event *rec_ev_prev;
+
+	bool active [0x10][0x7f];
 };
 
 static inline void
@@ -261,6 +264,27 @@ _play(plughandle_t *handle, int64_t to, uint32_t capacity)
 					handle->ref = lv2_atom_forge_write(&handle->forge, atom, lv2_atom_total_size(atom));
 				}
 
+				if(atom->type == handle->urid.midi_event)
+				{
+					const uint8_t *msg = LV2_ATOM_BODY_CONST(atom);
+					const uint8_t cmd = msg[0] & 0xf0;
+					const uint8_t cha = msg[0] & 0x0f;
+
+					switch(cmd)
+					{
+						case LV2_MIDI_MSG_NOTE_ON:
+						{
+							const uint8_t note = msg[1];
+							handle->active[cha][note] = true;
+						} break;
+						case LV2_MIDI_MSG_NOTE_OFF:
+						{
+							const uint8_t note = msg[1];
+							handle->active[cha][note] = false;
+						} break;
+					}
+				}
+
 				handle->last = frames; // advance frame time head
 			}
 
@@ -410,6 +434,35 @@ _cb(timely_t *timely, int64_t frames, LV2_URID type, void *data)
 				}
 			}
 
+			// terminate hanging notes
+			for(uint8_t cha = 0x0; cha < 0x10; cha++)
+			{
+				for(uint8_t note = 0x0; note < 0x80; note++)
+				{
+					if(handle->active[cha][note])
+					{
+						const uint8_t msg [3] = {
+							LV2_MIDI_MSG_NOTE_OFF | cha,
+							note,
+							0x0
+						};
+
+						if(handle->log)
+							lv2_log_trace(&handle->logger, "releasing hanging note %"PRIx8" %02"PRIx8, cha, note);
+
+						if(handle->ref)
+							handle->ref = lv2_atom_forge_frame_time(&handle->forge, frames);
+						if(handle->ref)
+							handle->ref = lv2_atom_forge_atom(&handle->forge, sizeof(msg), handle->urid.midi_event);
+						if(handle->ref)
+							handle->ref = lv2_atom_forge_write(&handle->forge, msg, sizeof(msg));
+
+						handle->active[cha][note] = false;
+					}
+				}
+			}
+
+			// clone mute state
 			handle->mute = handle->state.mute;
 		}
 
@@ -466,6 +519,7 @@ instantiate(const LV2_Descriptor* descriptor, double rate,
 	}
 
 	handle->urid.beat_time = handle->map->map(handle->map->handle, LV2_ATOM__beatTime);
+	handle->urid.midi_event = handle->map->map(handle->map->handle, LV2_MIDI__MidiEvent);
 
 	timely_mask_t mask = TIMELY_MASK_BAR_BEAT
 		//| TIMELY_MASK_BAR
