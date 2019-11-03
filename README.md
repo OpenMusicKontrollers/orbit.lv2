@@ -80,6 +80,11 @@ Quantizes incoming events to whole beats.
 Subdivide or multiply incoming time signals by whole fractions, e.g. to
 speed up time x2, x3, ... or slow it down to x1/2, x1/3, ...
 
+#### Monitor
+
+Break out transport events to parameters, e.g. to get BPM, etc. and automate
+other plugins with those values.
+
 #### Timecapsule
 	
 Record/Playback of arbitrary LV2 atoms to/from memory. Record all incoming atom

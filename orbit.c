@@ -36,6 +36,8 @@ lv2_descriptor(uint32_t index)
 			return &orbit_timecapsule;
 		case 6:
 			return &orbit_quantum;
+		case 7:
+			return &orbit_monitor;
 		default:
 			return NULL;
 	}

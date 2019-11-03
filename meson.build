@@ -5,6 +5,9 @@ project('orbit.lv2', 'c', default_options : [
 	'b_lto=false',
 	'c_std=c11'])
 
+source_root = meson.source_root()
+build_root = meson.build_root()
+
 add_project_arguments('-D_GNU_SOURCE', language : 'c')
 
 conf_data = configuration_data()
@@ -37,6 +40,7 @@ dsp_srcs = ['orbit.c',
 	'orbit_pacemaker.c',
 	'orbit_quantum.c',
 	'orbit_subspace.c',
+	'orbit_monitor.c',
 	'orbit_timecapsule.c']
 
 c_args = ['-fvisibility=hidden',
@@ -85,12 +89,13 @@ endif
 
 if lv2lint.found()
 	test('LV2 lint', lv2lint,
-		args : ['-Swarn', # -Ewarn fails due to linking against libz
+		args : ['-I', join_paths(build_root, ''),
 			'http://open-music-kontrollers.ch/lv2/orbit#beatbox',
 			'http://open-music-kontrollers.ch/lv2/orbit#click',
 			'http://open-music-kontrollers.ch/lv2/orbit#looper',
 			'http://open-music-kontrollers.ch/lv2/orbit#pacemaker',
 			'http://open-music-kontrollers.ch/lv2/orbit#quantum',
 			'http://open-music-kontrollers.ch/lv2/orbit#subspace',
+			'http://open-music-kontrollers.ch/lv2/orbit#monitor',
 			'http://open-music-kontrollers.ch/lv2/orbit#timecapsule'])
 endif

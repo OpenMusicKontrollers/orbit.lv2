@@ -508,7 +508,7 @@ orbit:beatbox
 		orbit:beatbox_beat_channel 0 ;
 	] .
 
-# Click Subspace
+# Orbit Subspace
 orbit:subspace_mode
 	a lv2:Parameter ;
 	rdfs:range atom:Int ;
@@ -567,6 +567,115 @@ orbit:subspace
 	state:state [
 		orbit:subspace_mode 0;
 		orbit:subspace_factor 1;
+	] .
+
+# Orbit Monitor
+orbit:monitor_barBeat
+	a lv2:Parameter ;
+	rdfs:label "barBeat" ;
+	rdfs:comment "get bar beat of transport" ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 128.0 ;
+	units:unit units:beat ;
+	rdfs:range atom:Float .
+orbit:monitor_bar
+	a lv2:Parameter ;
+	rdfs:label "bar" ;
+	rdfs:comment "get bar of transport" ;
+	lv2:minimum 0 ;
+	lv2:maximum 2147483647 ;
+	units:unit units:bar ;
+	rdfs:range atom:Long .
+orbit:monitor_beatUnit
+	a lv2:Parameter ;
+	rdfs:label "beatUnit" ;
+	rdfs:comment "get beat unit of transport" ;
+	lv2:minimum 1 ;
+	lv2:maximum 128 ;
+	rdfs:range atom:Int .
+orbit:monitor_beatsPerBar
+	a lv2:Parameter ;
+	rdfs:label "beatsPerBar" ;
+	rdfs:comment "get beats per bar of transport" ;
+	lv2:minimum 1.0 ;
+	lv2:maximum 128.0 ;
+	units:unit units:beat ;
+	rdfs:range atom:Float .
+orbit:monitor_beatsPerMinute
+	a lv2:Parameter ;
+	rdfs:label "beatsPerMinute" ;
+	rdfs:comment "get beats per minute of transport" ;
+	lv2:minimum 1.0 ;
+	lv2:maximum 800.0 ;
+	units:unit units:bpm ;
+	rdfs:range atom:Float .
+orbit:monitor_frame
+	a lv2:Parameter ;
+	rdfs:label "frame" ;
+	rdfs:comment "get frame of transport" ;
+	lv2:minimum 1 ;
+	lv2:maximum 2147483647 ;
+	rdfs:range atom:Long .
+orbit:monitor_framesPerSecond
+	a lv2:Parameter ;
+	rdfs:label "framesPerSecond" ;
+	rdfs:comment "get frames per second of transport" ;
+	lv2:minimum 1.0 ;
+	lv2:maximum 192000.0 ;
+	units:unit units:hz ;
+	rdfs:range atom:Float .
+orbit:monitor_speed
+	a lv2:Parameter ;
+	rdfs:label "speed" ;
+	rdfs:comment "get speed of transport" ;
+	lv2:minimum -1.0 ;
+	lv2:maximum 1.0 ;
+	rdfs:range atom:Float .
+
+orbit:monitor
+	a lv2:Plugin ,
+		lv2:ConverterPlugin ;
+	doap:name "Orbit Monitor" ;
+	doap:license lic:Artistic-2.0 ;
+	lv2:project proj:orbit ;
+	lv2:requiredFeature urid:map, state:loadDefaultState ;
+	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
+	lv2:extensionData state:interface ;
+
+	lv2:port [
+		# sink event port
+	  a lv2:InputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports time:Position ;
+		atom:supports patch:Message;
+		lv2:index 0 ;
+		lv2:symbol "event_in" ;
+		lv2:name "Time Input" ;
+		lv2:designation lv2:control ;
+	] , [
+		# source event port
+	  a lv2:OutputPort ,
+			atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports patch:Message;
+		lv2:index 1 ;
+		lv2:symbol "notify" ;
+		lv2:name "Notify" ;
+		lv2:designation lv2:control ;
+	] ;
+
+	patch:readable
+		orbit:monitor_barBeat ,
+		orbit:monitor_bar ,
+		orbit:monitor_beatUnit ,
+		orbit:monitor_beatsPerBar ,
+		orbit:monitor_beatsPerMinute ,
+		orbit:monitor_frame ,
+		orbit:monitor_framesPerSecond ,
+		orbit:monitor_speed ;
+
+	state:state [
 	] .
 
 # TimeCapsule Plugin

@@ -47,7 +47,7 @@
 #define ORBIT_PACEMAKER_URI					ORBIT_URI"#pacemaker"
 #define ORBIT_BEATBOX_URI						ORBIT_URI"#beatbox"
 #define ORBIT_SUBSPACE_URI					ORBIT_URI"#subspace"
-#define ORBIT_CARGOSHIP_URI					ORBIT_URI"#cargoship"
+#define ORBIT_MONITOR_URI						ORBIT_URI"#monitor"
 #define ORBIT_TIMECAPSULE_URI				ORBIT_URI"#timecapsule"
 #define ORBIT_QUANTUM_URI						ORBIT_URI"#quantum"
 
@@ -56,7 +56,7 @@ extern const LV2_Descriptor orbit_click;
 extern const LV2_Descriptor orbit_pacemaker;
 extern const LV2_Descriptor orbit_beatbox;
 extern const LV2_Descriptor orbit_subspace;
-extern const LV2_Descriptor orbit_cargoship;
+extern const LV2_Descriptor orbit_monitor;
 extern const LV2_Descriptor orbit_timecapsule;
 extern const LV2_Descriptor orbit_quantum;
 

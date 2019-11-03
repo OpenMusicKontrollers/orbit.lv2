@@ -67,6 +67,14 @@ orbit:subspace
 	lv2:binary <orbit@MODULE_SUFFIX@> ;
 	rdfs:seeAlso <orbit.ttl> .
 
+# Orbit Monitor
+orbit:monitor
+	a lv2:Plugin ;
+	lv2:minorVersion @MINOR_VERSION@ ;
+	lv2:microVersion @MICRO_VERSION@ ;
+	lv2:binary <orbit@MODULE_SUFFIX@> ;
+	rdfs:seeAlso <orbit.ttl> .
+
 # Orbit Quantum
 orbit:quantum
 	a lv2:Plugin ;
