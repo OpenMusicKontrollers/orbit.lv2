@@ -253,7 +253,7 @@ _path_intercept(void *data, int64_t frames, props_impl_t *impl)
 	{
 		job->beats = beats;
 		job->type = TC_JOB_CHANGE_PATH;
-		snprintf(job->file_path, len, handle->state.file_path);
+		snprintf(job->file_path, len, "%s", handle->state.file_path);
 
 		varchunk_write_advance(handle->to_worker, tot_size);
 		_wakeup(handle);

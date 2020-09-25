@@ -98,7 +98,7 @@ struct _plughandle_t {
 	LV2_Atom_Event *rec_ev_next;
 	LV2_Atom_Event *rec_ev_prev;
 
-	bool active [0x10][0x7f];
+	bool active [0x10][0x80];
 };
 
 static inline void
