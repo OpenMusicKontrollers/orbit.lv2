@@ -890,7 +890,7 @@ _work(LV2_Handle instance,
 			case TC_JOB_CHANGE_PATH:
 			{
 				_close_disk(handle);
-				strncpy(handle->file_path, job->file_path, PATH_MAX);
+				strncpy(handle->file_path, job->file_path, PATH_MAX - 1);
 				_reopen_disk(handle, false, job->beats); // open readonly by default FIXME
 			} break;
 
