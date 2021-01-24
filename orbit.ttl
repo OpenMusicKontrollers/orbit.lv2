@@ -31,7 +31,6 @@
 @prefix log:			<http://lv2plug.in/ns/ext/log#> .
 
 @prefix osc:			<http://open-music-kontrollers.ch/lv2/osc#> .
-@prefix lic:			<http://opensource.org/licenses/> .
 @prefix omk:			<http://open-music-kontrollers.ch/ventosus#> .
 @prefix proj:			<http://open-music-kontrollers.ch/lv2/> .
 @prefix orbit:		<http://open-music-kontrollers.ch/lv2/orbit#> .
@@ -121,7 +120,7 @@ orbit:looper
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Looper" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
@@ -217,7 +216,7 @@ orbit:click
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Click" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
@@ -322,7 +321,7 @@ orbit:pacemaker
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Pacemaker" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
@@ -449,7 +448,7 @@ orbit:beatbox
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Beatbox" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
@@ -530,7 +529,7 @@ orbit:subspace
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Subspace" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
@@ -636,7 +635,7 @@ orbit:monitor
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Monitor" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
@@ -709,7 +708,7 @@ orbit:timecapsule
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit TimeCapsule" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, urid:unmap, state:loadDefaultState, work:schedule ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
@@ -779,7 +778,7 @@ orbit:quantum
 	a lv2:Plugin ,
 		lv2:ConverterPlugin ;
 	doap:name "Orbit Quantum" ;
-	doap:license lic:Artistic-2.0 ;
+	doap:license <https://spdx.org/licenses/Artistic-2.0> ;
 	lv2:project proj:orbit ;
 	lv2:requiredFeature urid:map, state:loadDefaultState ;
 	lv2:optionalFeature lv2:isLive, lv2:hardRTCapable, state:threadSafeRestore, log:log ;
